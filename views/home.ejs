@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="/style.css">
+    <title>Home</title>
+</head>
+<body>
+    <h1>Welcome, <%= user.username %></h1>
+    <a href="/create-post">Create Post</a>
+    <a href="/logout">Logout</a>
+    
+    <h2>Posts</h2>
+    <% posts.forEach(post => { %>
+        <div class="post">
+            <p><%= post.content %></p>
+            <small>By: <%= post.user.username %></small>
+            <small>Likes: <%= post.likes.length %></small>
+            <% if (user && !post.likes.includes(user._id)) { %>
+                <form method="POST" action="/like/<%= post._id %>">
+                    <button type="submit">Like</button>
+                </form>
+            <% } %>
+        </div>
+    <% }) %>
+</body>
+</html>
