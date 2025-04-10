@@ -6,6 +6,13 @@
 </head>
 <body>
     <h1>Create Post</h1>
+    <% if (errors.length) { %>
+        <ul>
+            <% errors.forEach(error => { %>
+                <li><%= error.msg %></li>
+            <% }) %>
+        </ul>
+    <% } %>
     <form method="POST" action="/create-post">
         <textarea name="content" required></textarea>
         <button type="submit">Post</button>

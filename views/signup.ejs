@@ -6,6 +6,13 @@
 </head>
 <body>
     <h1>Sign Up</h1>
+    <% if (errors.length) { %>
+        <ul>
+            <% errors.forEach(error => { %>
+                <li><%= error.msg %></li>
+            <% }) %>
+        </ul>
+    <% } %>
     <form method="POST" action="/signup">
         <input type="text" name="username" placeholder="Username" required>
         <input type="password" name="password" placeholder="Password" required>
