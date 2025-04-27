@@ -14,10 +14,10 @@
     <% posts.forEach(post => { %>
         <div class="post">
             <p><%= post.content %></p>
-            <small>By: <%= post.user.username %></small>
-            <small>Likes: <%= post.likes.length %></small>
-            <% if (user && !post.likes.includes(user._id)) { %>
-                <form method="POST" action="/like/<%= post._id %>">
+            <small>By: <%= post.username %></small>
+            <small>Likes: <%= post.like_count %></small>
+            <% if (!post.hasLiked) { %>
+                <form method="POST" action="/like/<%= post.id %>">
                     <button type="submit">Like</button>
                 </form>
             <% } %>

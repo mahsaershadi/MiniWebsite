@@ -11,8 +11,8 @@
     <% likes.forEach(like => { %>
         <div class="post">
             <p><%= like.content %></p>
-            <small>By: <%= like.user.username %></small>
-            <small>Liked on: <%= like.createdAt %></small>
+            <small>By: <%= like.username %></small>
+            <small>Liked on: <%= like.created_at %></small>
         </div>
     <% }) %>
 </body>
