@@ -2,16 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const pool = require('../models/db');
-
-// Middleware for userId in header
-const authenticateUser = (req, res, next) => {
-    const userId = req.headers['user-id'];
-    if (!userId) {
-        return res.status(401).json({ error: 'User ID is required in header' });
-    }
-    req.userId = userId;
-    next();
-};
+const authenticateUser = require('../Middleware/auth');
 
 // Get all posts
 router.get('/posts', async (req, res) => {
