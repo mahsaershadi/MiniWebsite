@@ -4,6 +4,20 @@ const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const pool = require('../models/db');
 
+//Get all users
+router.get('/all-users', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, username FROM users ORDER BY username');
+        res.json({
+            userCount: result.rows.length,
+            users: result.rows
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // Signup API
 router.post('/signup', [
     body('username').trim().notEmpty().withMessage('Username is required')
