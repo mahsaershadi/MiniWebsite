@@ -2,23 +2,24 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
-const pool = require('../models/db');
+const db = require('../models/db');
+const authenticateUser = require('../middleware/auth');
 
 //Get all users
 router.get('/all-users', async (req, res) => {
     try {
-        const result = await pool.query('SELECT id, username FROM users ORDER BY username');
-        res.json({
-            userCount: result.rows.length,
-            users: result.rows
+        const users = await db.User.findAll({
+            attributes: ['id', 'username'],
+            order: [['username', 'ASC']]
         });
+        res.json({ userCount: users.length, users: users });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// Signup API
+// Signup
 router.post('/signup', [
     body('username').trim().notEmpty().withMessage('Username is required')
         .isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
@@ -34,17 +35,14 @@ router.post('/signup', [
     const hashedPassword = await bcrypt.hash(password, 10);
 
     try {
-        const user = await pool.query(
-            'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING *',
-            [username, hashedPassword]
-        );
-        res.status(201).json({ message: 'User created successfully', userId: user.rows[0].id });
+        const user = await db.User.create({ username, password: hashedPassword });
+        res.status(201).json({ message: 'User created successfully', userId: user.id });
     } catch (err) {
         res.status(400).json({ error: 'Username already exists' });
     }
 });
 
-// Login API
+// Login
 router.post('/login', [
     body('username').trim().notEmpty().withMessage('Username is required'),
     body('password').notEmpty().withMessage('Password is required')
@@ -56,15 +54,40 @@ router.post('/login', [
 
     const { username, password } = req.body;
     try {
-        const user = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-        if (user.rows.length && await bcrypt.compare(password, user.rows[0].password)) {
-            res.json({ message: 'Login successful', userId: user.rows[0].id });
+        const user = await db.User.findOne({ where: { username } });
+        if (user && await bcrypt.compare(password, user.password)) {
+            res.json({ message: 'Login successful', userId: user.id });
         } else {
             res.status(401).json({ error: 'Invalid credentials' });
         }
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server error' });
+    }
+});
+
+//delete user (account)
+router.delete('/users/:id', authenticateUser, async (req, res) => {
+    const userIdFromHeader = parseInt(req.userId, 10); 
+    const userIdFromParams = parseInt(req.params.id, 10); 
+
+    // Check if the user is allowed to delete
+    if (userIdFromHeader !== userIdFromParams) {
+        return res.status(403).json({ error: 'You can only delete your own account' });
+    }
+
+    try {
+        const user = await db.User.findByPk(userIdFromParams);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        //delete acc
+        await user.destroy();
+        res.json({ message: 'User deleted successfully' });
+    } catch (err) {
+        console.error('Error in /users/:id DELETE route:', err);
+        res.status(500).json({ error: 'Server error'});
     }
 });
 

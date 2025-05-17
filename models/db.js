@@ -1,11 +1,35 @@
-const { Pool } = require('pg');
+const { Sequelize, DataTypes, Op } = require('sequelize');
+const path = require('path');
 
-const pool = new Pool({
-    user: 'postgres',
+const sequelize = new Sequelize('mini_website', 'postgres', '1363267469', {
     host: 'localhost',
-    database: 'mini_website',
-    password: '1363267469',
-    port: 5432,
+    dialect: 'postgres',
+    logging: () => {}, 
 });
 
-module.exports = pool;
+const db = {};
+db.Sequelize = Sequelize;
+db.sequelize = sequelize;
+db.Op = Op;
+
+// Define models
+db.User = require('./user')(sequelize, Sequelize);
+db.Post = require('./post')(sequelize, Sequelize);
+db.Like = require('./like')(sequelize, DataTypes);
+
+// Define associations
+db.User.hasMany(db.Post, { foreignKey: 'user_id', as: 'AuthoredPosts' });
+db.Post.belongsTo(db.User, { foreignKey: 'user_id', as: 'Author' });
+db.User.belongsToMany(db.Post, { through: db.Like, foreignKey: 'user_id', as: 'LikedPosts' });
+db.Post.belongsToMany(db.User, { through: db.Like, foreignKey: 'post_id', as: 'LikedByUsers' });
+
+db.Post.hasMany(db.Like, { foreignKey: 'post_id', as: 'Likes', onDelete: 'CASCADE' });
+db.Like.belongsTo(db.Post, { foreignKey: 'post_id', onDelete: 'CASCADE' });
+
+Object.keys(db).forEach(modelName => {
+    if (db[modelName].associate) {
+        db[modelName].associate(db);
+    }
+});
+
+module.exports = db;
