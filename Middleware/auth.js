@@ -1,13 +1,23 @@
+const JWT = require('jsonwebtoken');
+
 const authenticateUser = (req, res, next) => {
-    console.log('Middleware executing...');
-    const userId = req.headers['user-id'];
-    console.log('Received user-id:', userId);
-    if (!userId) {
-        return res.status(401).json({ error: 'User ID is required in header' });
+    const authHeader = req.headers['authorization'];
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Authentication token not provided' });
     }
-    req.userId = userId; 
-    console.log('Setting req.userId to:', userId);
-    next();
+
+    const token = authHeader.split(' ')[1];
+
+    try {
+        const decoded = JWT.verify(token, process.env.ACCESS_TOKEN);
+        console.log('SECRET:', process.env.ACCESS_TOKEN);
+        req.userId = decoded.userId;
+        next();
+    } catch (err) {
+        console.error('Error verifying token:', err);
+        return res.status(403).json({ error: 'The token is invalid' });
+    }
 };
 
 module.exports = authenticateUser;

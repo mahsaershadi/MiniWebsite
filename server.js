@@ -2,6 +2,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const db = require('./models/db');
+const JWT = require ('jsonwebtoken');
+require ('dotenv').config();
 
 const app = express ();
 
