@@ -8,6 +8,10 @@ module.exports = (sequelize, DataTypes) => {
         password: {
             type: DataTypes.STRING,
             allowNull: false
+        },
+        status: {
+            type: DataTypes.INTEGER,
+            defaultValue: 1 // 1 = active, -1 = deleted
         }
     }, {
         tableName: 'users',

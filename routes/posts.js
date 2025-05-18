@@ -3,11 +3,14 @@ const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const db = require('../models/db'); 
 const authenticateUser = require('../middleware/auth');
+const { where } = require('sequelize');
 
 //get all posts
 router.get('/all-posts', async (req, res) => {
     try {
         const posts = await db.Post.findAll({
+            where: {status: 1}, 
+        
             include: [
                 { model: db.User,as: 'Author', attributes: ['username'] }
             ],
@@ -39,13 +42,13 @@ router.get('/posts',authenticateUser, async (req, res) => {
         
         // Find user's posts
         const posts = await db.Post.findAll({
-            where: { user_id: userId},
+            where: { user_id: userId, status: 1},
             include: [
                 { model: db.User,as: 'Author', attributes: ['username'] }
             ],
             attributes: {
                 include: [
-                    [db.sequelize.literal('(SELECT COUNT(*) FROM likes WHERE likes.post_id = "Post"."id")'), 'like_count']
+                    [db.sequelize.literal('(SELECT COUNT(*) FROM "likes" WHERE "likes"."post_id" = "Post"."id")'), 'like_count']
                 ]
             },
             order: [['created_at', 'DESC']]
@@ -78,7 +81,12 @@ router.post('/posts',authenticateUser, [
     const userId = parseInt(req.userId, 10);
     console.log('creating post with content:', content, 'and userId:', userId);
     try {
-        const user = await db.User.findByPk(userId);
+        const user = await db.User.findOne({
+            where: {
+                id: userId,
+                status: 1
+            }
+        });
         if (!user) {
             return res.status(404).json({error: 'there is no user with this id'});
         }
@@ -132,7 +140,12 @@ router.get('/posts/liked', async (req, res) => {
     try {
         const likedPosts = await db.Post.findAll({
             include: [
-                { model: db.User, as: 'Author', attributes: ['username'] }
+                { 
+                    model: db.User,
+                    as: 'Author',
+                    attributes: ['username'],
+                    where: {status: 1}
+                }
             ],
             attributes: {
                 include: [
@@ -143,6 +156,7 @@ router.get('/posts/liked', async (req, res) => {
                 id: {
                     [db.Op.in]: db.sequelize.literal('(SELECT post_id FROM likes)')
                 },
+                status: 1,
                 [db.Op.and]: [
                     db.sequelize.where(
                         db.sequelize.literal('(SELECT COUNT(*) FROM likes WHERE likes.post_id = "Post"."id")'),
@@ -216,7 +230,13 @@ router.delete('/posts/:id', authenticateUser, async (req, res) => {
     const postId = parseInt(req.params.id, 10); 
 
     try {
-        const post = await db.Post.findByPk(postId);
+        const post = await db.Post.findOne({
+            where: {
+                id: postId,
+                status: 1
+            }
+        });
+
         if (!post) {
             return res.status(404).json({ error: 'Post not found' });
         }
@@ -226,7 +246,15 @@ router.delete('/posts/:id', authenticateUser, async (req, res) => {
             return res.status(403).json({ error: 'You can only delete your own posts' });
         }
 
-        await post.destroy();
+        await db.Post.update(
+            {status: -1},
+            {
+                where: {
+                    id: postId,
+                    user_id: userId,
+                    status: 1
+            }}
+        );
         res.json({ message: 'Post deleted successfully' });
     } catch (err) {
         console.error('Error in /posts/:id DELETE route:', err);

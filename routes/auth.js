@@ -4,13 +4,17 @@ const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const db = require('../models/db');
 const authenticateUser = require('../middleware/auth');
+const { where } = require('sequelize');
 
 //Get all users
 router.get('/all-users', async (req, res) => {
     try {
         const users = await db.User.findAll({
-            attributes: ['id', 'username'],
-            order: [['username', 'ASC']]
+            attributes: ['id', 'username', 'status'],
+            order: [['username', 'ASC']],
+            where: {
+                status: 1
+            }
         });
         res.json({ userCount: users.length, users: users });
     } catch (err) {
@@ -71,23 +75,33 @@ router.delete('/users/:id', authenticateUser, async (req, res) => {
     const userIdFromHeader = parseInt(req.userId, 10); 
     const userIdFromParams = parseInt(req.params.id, 10); 
 
+    const transaction = await db.sequelize.transaction();
+
     // Check if the user is allowed to delete
     if (userIdFromHeader !== userIdFromParams) {
         return res.status(403).json({ error: 'You can only delete your own account' });
     }
 
     try {
-        const user = await db.User.findByPk(userIdFromParams);
+        const user = await db.User.findOne({
+            where: {
+                id: userIdFromParams,
+                status: 1
+            }
+        });
+
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        //delete acc
-        await user.destroy();
+        await db.User.update(
+            {status: -1},
+            {where: {id: userIdFromParams}}
+        );
         res.json({ message: 'User deleted successfully' });
     } catch (err) {
         console.error('Error in /users/:id DELETE route:', err);
-        res.status(500).json({ error: 'Server error'});
+        res.status(500).json({ error: 'Server error', details: err.message});
     }
 });
 
