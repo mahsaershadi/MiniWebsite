@@ -11,10 +11,31 @@ module.exports = (sequelize, DataTypes) => {
         uploadedat: {
             type: DataTypes.DATE,
             defaultValue: DataTypes.NOW
+        },
+        user_id: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+            references: {
+                model: 'users',
+                key: 'id'
+            }
+        },
+        status: {
+            type: DataTypes.INTEGER,
+            defaultValue: 1 // 1 = active, -1 = deleted
+        },
+        original_filename: {
+            type: DataTypes.STRING
         }
     }, {
         tableName: 'photos',
-        timestamps: false
+        timestamps: false,
+        indexes: [
+        {
+            unique: true,
+            fields: ['filename', 'user_id']
+        }
+    ]
     });
 
     return Photo;

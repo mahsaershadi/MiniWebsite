@@ -26,6 +26,7 @@ db.Post.belongsToMany(db.User, { through: db.Like, foreignKey: 'post_id', as: 'L
 
 db.Post.hasMany(db.Like, { foreignKey: 'post_id', as: 'Likes', onDelete: 'CASCADE' });
 db.Like.belongsTo(db.Post, { foreignKey: 'post_id', onDelete: 'CASCADE' });
+db.Photo.belongsTo(db.User, { foreignKey: 'user_id', as: 'Author' });
 
 Object.keys(db).forEach(modelName => {
     if (db[modelName].associate) {
