@@ -4,10 +4,13 @@ const { body, validationResult } = require('express-validator');
 const db = require('./models/db');
 const JWT = require ('jsonwebtoken');
 require ('dotenv').config();
+const uploadRoute = require('./routes/upload');
+
 
 const app = express ();
 
 //middleware
+app.use('/api', uploadRoute);
 app.use(express.json());
 
 // Sync Sequelize models

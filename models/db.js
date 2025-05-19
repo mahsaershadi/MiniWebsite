@@ -16,6 +16,7 @@ db.Op = Op;
 db.User = require('./user')(sequelize, Sequelize);
 db.Post = require('./post')(sequelize, Sequelize);
 db.Like = require('./like')(sequelize, DataTypes);
+db.Photo = require('./photo')(sequelize, Sequelize.DataTypes);
 
 // Define associations
 db.User.hasMany(db.Post, { foreignKey: 'user_id', as: 'AuthoredPosts' });

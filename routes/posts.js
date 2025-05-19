@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const db = require('../models/db'); 
-const authenticateUser = require('../middleware/auth');
+const authenticateUser = require('../Middleware/auth');
 const { where } = require('sequelize');
 
 //get all posts
