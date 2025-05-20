@@ -2,11 +2,13 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs').promises;
+const fsPromises = require('fs').promises;
+const fs = require('fs');
 const sharp = require('sharp');
 const { Photo, User } = require('../models/db');
 const db = require('../models/db');
 const authenticateUser = require('../Middleware/auth');
+const uploadError = require('../Middleware/upload-error');
 const { error } = require('console');
 const { where } = require('sequelize');
 
@@ -22,38 +24,31 @@ const storage = multer.diskStorage({
 });
 
 //File size limit
-const uploads = multer({
+const photos = multer({
     storage: storage,
     limits: { fileSize: 5 * 1024 * 1024 } //Maximum file size: 5MB
-});
-
-const uploadErrorHandler = (req, res, next) => {
-    uploads(req, res, (err) => {
-        if (err) {
-            if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-                return res.status(400).json({ error: 'The file size is greater than 5 MB.' });
-            }
-            return res.status(400).json({ error: err.message || 'Error uploading file' });
-        }
-        next(); 
-    });
-};
+}).single('photo');
 
 const upload = multer({ storage });
 
 //upload a photo
-router.post('/upload', authenticateUser, uploads.single('photo'), async (req, res) => {
-    const userId = req.userId;
-    const file = req.file;
-
-    let originalPath, webpPath, thumbnailPath;
+router.post('/upload', authenticateUser, async (req, res, next) => {
+        let originalPath, webpPath, thumbnailPath;
+        const userId = req.userId;
+        const file = req.file;
     try {
-        //check for file existing
-        if (!file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
+        await new Promise((resolve, reject) => {
+            photos(req, res, (err) => {
+                if (err) return reject(err);
+                resolve();
+            });
+        });
 
-        // Check if file already exists
+        if (!file) {
+            return res.status(400).json({ error: 'No file uploaded'});
+        }
+        
+        //check for file existing
         const existingPhoto = await Photo.findOne({
             where: {
                 filename: file.filename,
@@ -62,42 +57,42 @@ router.post('/upload', authenticateUser, uploads.single('photo'), async (req, re
         });
 
         if (existingPhoto) {
-            return res.status(409).json({ error: 'This image has already been uploaded by the same user.' });
+            return res.status(409).json({ error: 'This image has already been uploaded by the same user' });
         }
 
-
+        
         //main file path and thumbnail
         originalPath = file.path;
         const originalFilename = file.filename;
-        const webpFilename = path.parse(file.filename).name + '.webp';
+        const webpFilename = path.parse(originalFilename).name + '.webp';
         webpPath = path.join('uploads', webpFilename);
         thumbnailPath = path.join('uploads', 'thumbnails', `thumb-${webpFilename}`);
 
-        
+
         //thumbnails folder
         const thumbnailDir = path.join(__dirname, '..', 'uploads', 'thumbnails');
-        await fs.mkdir(thumbnailDir, { recursive: true });
-        
+        if (!fs.existsSync(thumbnailDir)) {
+            await fsPromises.mkdir(thumbnailDir, { recursive: true });
+        }
+
         // Convert to .webp
         await sharp(originalPath)
-            .webp({ quality: 85, effort: 6 }) 
+            .webp({ quality: 85, effort: 6 })
             .toFile(webpPath);
-
 
         //Generate thumbnail with smaller size
         await sharp(originalPath)
             .resize({ width: 200 })
-            .webp({ quality: 70 }) 
+            .webp({ quality: 70 })
             .toFile(thumbnailPath);
-            
-            
+
         //delete original file
-        fs.unlink(originalPath);
+        await fsPromises.unlink(originalPath);
 
         // Save to DB
         const newPhoto = await Photo.create({
             filename: webpFilename,
-            path: webpPath,
+            path: `/uploads/${webpFilename}`,
             user_id: userId
         });
 
@@ -111,15 +106,19 @@ router.post('/upload', authenticateUser, uploads.single('photo'), async (req, re
             }
         });
     } catch (err) {
-        console.error('Upload error:', err);
+        console.error('Upload error caught:', err);
         //Delete temporary files if an error occurs
-        if (file) await fs.unlink(file.path).catch(() => {});
-        if (fs.existsSync(webpPath)) await fs.unlink(webpPath).catch(() => {});
-        if (fs.existsSync(thumbnailPath)) await fs.unlink(thumbnailPath).catch(() => {});
-        res.status(500).json({ error: 'Server error', details: err.message });
+        const cleanup = async () => {
+            if (req.file?.path) await fsPromises.unlink(req.file.path).catch(() => {});
+            if (fs.existsSync(webpPath)) await fsPromises.unlink(webpPath).catch(() => {});
+            if (fs.existsSync(thumbnailPath)) await fsPromises.unlink(thumbnailPath).catch(() => {});
+        };
+        await cleanup();
+        next(err);  
     }
-});
+}, uploadError);
 
+module.exports = router;
 
 //get all the upload photos
 router.get('/all-photos', async (req, res) => {
