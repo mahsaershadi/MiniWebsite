@@ -10,8 +10,11 @@ const uploadRoute = require('./routes/upload');
 const app = express ();
 
 //middleware
-app.use('/api', uploadRoute);
 app.use(express.json());
+
+// ارائه فایل‌های استاتیک
+app.use('/uploads', express.static('uploads'));
+app.use('/thumbnails', express.static('thumbnails'));
 
 // Sync Sequelize models
 db.sequelize.sync({ force: false }) // Set force: true to drop and recreate tables (use cautiously)
@@ -20,8 +23,10 @@ db.sequelize.sync({ force: false }) // Set force: true to drop and recreate tabl
 
 const authRouts = require('./routes/auth');
 const postsRouts = require('./routes/posts');
+const uploadRoutes = require('./routes/upload'); // مسیر درست
 app.use('/api', authRouts);
 app.use('/api', postsRouts);
+app.use('/api', uploadRoutes);
 
 app.listen(3000, () => {
     console.log('Server running on port 3000');

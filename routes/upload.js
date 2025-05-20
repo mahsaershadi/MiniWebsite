@@ -27,13 +27,26 @@ const uploads = multer({
     limits: { fileSize: 5 * 1024 * 1024 } //Maximum file size: 5MB
 });
 
+const uploadErrorHandler = (req, res, next) => {
+    uploads(req, res, (err) => {
+        if (err) {
+            if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ error: 'The file size is greater than 5 MB.' });
+            }
+            return res.status(400).json({ error: err.message || 'Error uploading file' });
+        }
+        next(); 
+    });
+};
+
 const upload = multer({ storage });
 
 //upload a photo
-router.post('/upload', authenticateUser, upload.single('photo'), async (req, res) => {
+router.post('/upload', authenticateUser, uploads.single('photo'), async (req, res) => {
     const userId = req.userId;
     const file = req.file;
 
+    let originalPath, webpPath, thumbnailPath;
     try {
         //check for file existing
         if (!file) {
@@ -52,28 +65,57 @@ router.post('/upload', authenticateUser, upload.single('photo'), async (req, res
             return res.status(409).json({ error: 'This image has already been uploaded by the same user.' });
         }
 
+
+        //main file path and thumbnail
+        originalPath = file.path;
+        const originalFilename = file.filename;
+        const webpFilename = path.parse(file.filename).name + '.webp';
+        webpPath = path.join('uploads', webpFilename);
+        thumbnailPath = path.join('uploads', 'thumbnails', `thumb-${webpFilename}`);
+
+        
+        //thumbnails folder
+        const thumbnailDir = path.join(__dirname, '..', 'uploads', 'thumbnails');
+        await fs.mkdir(thumbnailDir, { recursive: true });
+        
         // Convert to .webp
-            const originalPath = file.path;
-            const webpFilename = path.parse(file.filename).name + '.webp';
-            const webpPath = path.join('uploads', webpFilename);
+        await sharp(originalPath)
+            .webp({ quality: 85, effort: 6 }) 
+            .toFile(webpPath);
 
-            await sharp(originalPath)
-                .webp({ quality: 80 })
-                .toFile(webpPath);
 
-            // Optionally delete original file
-            fs.unlinkSync(originalPath);
+        //Generate thumbnail with smaller size
+        await sharp(originalPath)
+            .resize({ width: 200 })
+            .webp({ quality: 70 }) 
+            .toFile(thumbnailPath);
+            
+            
+        //delete original file
+        fs.unlink(originalPath);
 
-            // Save to DB
-            const newPhoto = await Photo.create({
-                filename: webpFilename,
-                path: webpPath,
-                user_id: userId
-            });
+        // Save to DB
+        const newPhoto = await Photo.create({
+            filename: webpFilename,
+            path: webpPath,
+            user_id: userId
+        });
 
-        res.status(201).json({ message: 'Photo uploaded successfully', photo: newPhoto });
+        res.status(201).json({
+            message: 'Photo uploaded successfully.',
+            photo: {
+                id: newPhoto.id,
+                filename: newPhoto.filename,
+                originalPath: `/uploads/${webpFilename}`,
+                thumbnailPath: `/uploads/thumbnails/thumb-${webpFilename}`
+            }
+        });
     } catch (err) {
         console.error('Upload error:', err);
+        //Delete temporary files if an error occurs
+        if (file) await fs.unlink(file.path).catch(() => {});
+        if (fs.existsSync(webpPath)) await fs.unlink(webpPath).catch(() => {});
+        if (fs.existsSync(thumbnailPath)) await fs.unlink(thumbnailPath).catch(() => {});
         res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
@@ -90,7 +132,18 @@ router.get('/all-photos', async (req, res) => {
                     ],
                     order: [['uploadedat', 'DESC']]
                 });
-                res.json(photos);
+
+                //Add thumbnail path to each image
+                const photosWithThumbnails = photos.map(photo => {
+                const webpFilename = photo.filename;
+                return {
+                    ...photo.toJSON(),
+                    originalPath: `/uploads/${webpFilename}`,
+                    thumbnailPath: `/uploads/thumbnails/thumb-${webpFilename}`
+                };
+        });
+
+        res.json(photosWithThumbnails);
     } catch(err) {
         console.error('Error fetching photos:', err);
         res.status(500).json({ error: 'Server error' });
@@ -117,7 +170,20 @@ router.get('/photos',authenticateUser, async (req, res) => {
             ],
             order: [['uploadedat', 'DESC']]
         });
-        res.json(photos);
+        if (photos.length === 0) {
+            return res.json({ message: 'No photo found for this user' });
+        }
+        //Add thumbnail path to each image
+        const photosWithThumbnails = photos.map(photo => {
+            const webpFilename = photo.filename;
+            return {
+                ...photo.toJSON(),
+                originalPath: `/uploads/${webpFilename}`,
+                thumbnailPath: `/uploads/thumbnails/thumb-${webpFilename}`
+            };
+        });
+
+        res.json(photosWithThumbnails);
     } catch (err) {
         console.error('Error in /photos route',err);
         res.status(500).json({ error: 'Server error'});
@@ -136,6 +202,7 @@ router.delete('/photos/:id', authenticateUser, async (req, res) => {
                         status: 1
                     }
                 });
+
         if (!photo) {
             return res.status(404).json({error: 'photo not found'});
         }
@@ -145,22 +212,29 @@ router.delete('/photos/:id', authenticateUser, async (req, res) => {
             return res.status(403).json({ error: 'You can only delete your own photos' });
         }
         
-        // Delete file from disk
-        fs.unlink(photo.path, async (err) => {
-            if (err) console.warn('File may not exist on disk:', err.message);
+        //main file and thumbnail
+        const webpFilename = photo.filename;
+        const webpPath = path.join(__dirname, '..', 'uploads', webpFilename);
+        const thumbnailPath = path.join(__dirname, '..', 'uploads', 'thumbnails', `thumb-${webpFilename}`);
+
+        //deleting main file and thumbnail
+        await Promise.all([
+            fs.unlink(webpPath).catch(err => console.warn('File may not exist on disk:', err.message)),
+            fs.unlink(thumbnailPath).catch(err => console.warn('Thumbnail may not exist on disk:', err.message))
+        ]);
             
-            // Delete from DB
-            await db.Photo.update(
-                        {status: -1},
-                        {
-                            where: {
-                                id: photoId,
-                                user_id: userId,
-                                status: 1
-                        }}
-                    );
-            res.status(200).json({ message: 'Photo deleted successfully' });
-        });
+        // Delete from DB
+        await db.Photo.update(
+            {status: -1},
+            {
+                where: {
+                    id: photoId,
+                    user_id: userId,
+                    status: 1
+                }}
+        );
+
+        res.status(200).json({ message: 'Photo deleted successfully' });
     } catch (err) {
         console.error('Delete error:', err);
         res.status(500).json({ error: 'Server error', details: err.message });
