@@ -2,6 +2,8 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../Middleware/auth';
 import { Photo, User } from '../models';
 
+
+///upload pic
 export const uploadGalleryPhotos = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const files = req.files as Express.Multer.File[];
@@ -13,7 +15,8 @@ export const uploadGalleryPhotos = async (req: AuthRequest, res: Response, next:
     const photos = await Promise.all(
       files.map(file => Photo.create({
         filename: file.filename,
-        userId
+        userId,
+        status: 1
       }))
     );
 
@@ -23,13 +26,15 @@ export const uploadGalleryPhotos = async (req: AuthRequest, res: Response, next:
   }
 };
 
+
+//get pics
 export const getGalleryPhotos = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: 'User not authenticated' });
 
     const photos = await Photo.findAll({
-      where: { userId },
+      where: { userId , status: 1 },
       include: [{ 
         model: User, 
         as: 'user', 

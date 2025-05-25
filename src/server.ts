@@ -3,6 +3,7 @@ import path from 'path';
 import postRoutes from './routes/postRoutes';
 import galleryRoutes from './routes/photoRoutes';
 import authRoutes from './routes/authRoutes';
+import deleteRoutes from './routes/deleteRoutes';
 import { sequelize } from './models';
 
 const app = express();
@@ -13,6 +14,7 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use('/api', authRoutes);
 app.use('/api', postRoutes);
 app.use('/api', galleryRoutes);
+app.use('/api', deleteRoutes);
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);

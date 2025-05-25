@@ -41,12 +41,32 @@ User.init({
   status: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    defaultValue: 1
+    defaultValue: 1 // 1 = active, -1 = deleted
   }
 }, {
   sequelize,
   tableName: 'users',
-  //timestamps: true,
+  defaultScope: {
+    where: {
+      status: 1
+    },
+    attributes: {
+      exclude: ['password']
+    }
+  },
+  scopes: {
+    withPassword: {
+      where: {
+        status: 1
+      }
+    },
+    deleted: {
+      where: {
+        status: -1
+      }
+    },
+    all: {}
+  },
   hooks: {
     beforeCreate: async (user: User) => {
       user.password = await bcrypt.hash(user.password, 10);

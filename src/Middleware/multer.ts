@@ -10,7 +10,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 // Thumbnail size
 const THUMBNAIL_SIZE = 200;
 
-// Allowed file types
+// Allowed types
 const ALLOWED_FILE_TYPES = [
   'image/jpeg',
   'image/jpg',
@@ -19,7 +19,6 @@ const ALLOWED_FILE_TYPES = [
   'image/gif'
 ];
 
-// Ensure upload directories exist
 const createUploadDirs = async () => {
   const dirs = ['uploads', 'uploads/thumbnails'];
   for (const dir of dirs) {
@@ -31,7 +30,6 @@ const createUploadDirs = async () => {
   }
 };
 
-// Create upload directories on startup
 createUploadDirs().catch(console.error);
 
 const storage = multer.diskStorage({
@@ -39,14 +37,12 @@ const storage = multer.diskStorage({
     cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
-    // Keep original extension temporarily
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
   }
 });
 
 const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  // Check file type
   if (!ALLOWED_FILE_TYPES.includes(file.mimetype)) {
     cb(new Error('Invalid file type. Only JPEG, PNG, GIF and WebP images are allowed.'));
     return;
@@ -69,7 +65,7 @@ const upload = multer({
   }
 });
 
-// Middleware to convert uploaded images to WebP and create thumbnails
+//convert images to WebP and create thumbnails
 export const convertToWebP = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.files || !Array.isArray(req.files)) {
@@ -78,19 +74,15 @@ export const convertToWebP = async (req: Request, res: Response, next: NextFunct
 
     const files = req.files as Express.Multer.File[];
     
-    // Process each uploaded file
     await Promise.all(files.map(async (file) => {
       try {
         const webpFilename = file.filename.replace(/\.[^/.]+$/, '.webp');
         const webpPath = path.join('uploads', webpFilename);
         
-        // Read the uploaded file
         const image = sharp(file.path);
         
-        // Get image metadata
         const metadata = await image.metadata();
         
-        // Convert main image to WebP
         await image
           .webp({
             quality: 80,
@@ -103,7 +95,7 @@ export const convertToWebP = async (req: Request, res: Response, next: NextFunct
           })
           .toFile(webpPath);
 
-        // Generate thumbnail
+        //thumbnail
         const thumbnailPath = path.join('uploads/thumbnails', `thumb_${webpFilename}`);
         await sharp(file.path)
           .webp({
@@ -113,15 +105,13 @@ export const convertToWebP = async (req: Request, res: Response, next: NextFunct
           .resize({
             width: THUMBNAIL_SIZE,
             height: THUMBNAIL_SIZE,
-            fit: 'cover',
-            position: 'centre'
+            fit: 'inside'
           })
           .toFile(thumbnailPath);
 
         // Delete the original file
         await fs.unlink(file.path);
 
-        // Update file information
         file.filename = webpFilename;
         file.path = webpPath;
         file.mimetype = 'image/webp';

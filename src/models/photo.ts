@@ -7,6 +7,7 @@ interface PhotoAttributes {
   id: number;
   userId: number;
   filename: string;
+  status: number;
 }
 
 interface PhotoCreationAttributes extends Optional<PhotoAttributes, 'id'> {}
@@ -15,6 +16,7 @@ class Photo extends Model<PhotoAttributes, PhotoCreationAttributes> implements P
   public id!: number;
   public userId!: number;
   public filename!: string;
+  public status!: number;
   public readonly post?: any;
 }
 
@@ -35,6 +37,11 @@ Photo.init({
   filename: {
     type: DataTypes.STRING,
     allowNull: false
+  },
+  status: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 1 // 1 = active, -1 = deleted
   }
 }, {
   sequelize,
