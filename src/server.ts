@@ -1,26 +1,31 @@
-import express, { ErrorRequestHandler } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
-import sequelize from './utils/database';
 import postRoutes from './routes/postRoutes';
-import Post from './models/post';
-import Photo from './models/photo';
+import galleryRoutes from './routes/photoRoutes';
+import authRoutes from './routes/authRoutes';
+import { sequelize } from './models';
 
 const app = express();
 
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-app.use('/thumbnails', express.static(path.join(__dirname, '..', 'thumbnails')));
-app.use(postRoutes);
 
-const errorHandler: ErrorRequestHandler = (err: Error, req, res, next) => {
+app.use('/api', authRoutes);
+app.use('/api', postRoutes);
+app.use('/api', galleryRoutes);
+
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
-  res.status(500).json({ error: err.message || 'Server Error' });
-};
-app.use(errorHandler);
-
-sequelize.sync({ alter: true }).then(() => {
-  app.listen(3000, () => console.log('Server running on http://localhost:5432'));
-}).catch(err => {
-  console.error('Failed to sync database:', err);
-  process.exit(1);
+  res.status(500).json({ error: err.message || 'Server error' });
 });
+
+const PORT = process.env.PORT || 3000;
+sequelize.sync({ force: false }).then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}).catch(err => {
+  console.error('Unable to connect to the database:', err);
+});
+
+export default app;

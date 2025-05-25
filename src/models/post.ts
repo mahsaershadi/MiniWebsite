@@ -1,26 +1,26 @@
 import { DataTypes, Model, Optional } from 'sequelize';
-import sequelize from '../utils/database';
+import sequelize  from '../utils/database';
+import User from './user';
+import Photo from './photo';
 
 interface PostAttributes {
   id: number;
   title: string;
   price: number;
-  coverPhoto: string;
-  //created_at: Date;
+  userId: number;
+  cover_photo_id?: number;
   status: number;
 }
 
-type PostCreationAttributes = Optional<PostAttributes, 'id'>;
+interface PostCreationAttributes extends Optional<PostAttributes, 'id' | 'cover_photo_id'> {}
 
 class Post extends Model<PostAttributes, PostCreationAttributes> implements PostAttributes {
   public id!: number;
   public title!: string;
   public price!: number;
-  public coverPhoto!: string;
-  //public created_at!: Date;
+  public userId!: number;
+  public cover_photo_id?: number;
   public status!: number;
-
-  public readonly photos?: any[];
 }
 
 Post.init({
@@ -37,15 +37,16 @@ Post.init({
     type: DataTypes.FLOAT,
     allowNull: false
   },
-  coverPhoto: {
-    type: DataTypes.STRING,
-    allowNull: true
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: { model: User, key: 'id' }
   },
-  // created_at: {
-  //   type: DataTypes.DATE,
-  //   allowNull: false,
-  //   defaultValue: DataTypes.NOW
-  // },
+  cover_photo_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: { model: Photo, key: 'id' }
+  },
   status: {
     type: DataTypes.INTEGER,
     defaultValue: 1 // 1 = active, -1 = deleted
@@ -53,7 +54,8 @@ Post.init({
 }, {
   sequelize,
   tableName: 'posts',
-  timestamps: false 
+  //timestamps: false 
 });
+
 
 export default Post;
