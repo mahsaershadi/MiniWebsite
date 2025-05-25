@@ -1,7 +1,7 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../utils/database';
 import User from './user';
-
+import Post from './post';
 
 interface PhotoAttributes {
   id: number;
@@ -15,6 +15,7 @@ class Photo extends Model<PhotoAttributes, PhotoCreationAttributes> implements P
   public id!: number;
   public userId!: number;
   public filename!: string;
+  public readonly post?: any;
 }
 
 Photo.init({
@@ -39,6 +40,5 @@ Photo.init({
   sequelize,
   tableName: 'photos'
 });
-
 
 export default Photo;

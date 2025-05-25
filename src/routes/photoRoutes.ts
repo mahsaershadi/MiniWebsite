@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import { uploadGalleryPhotos, getGalleryPhotos } from '../controllers/photoController';
 import authenticateUser from '../Middleware/auth';
-import upload from '../Middleware/multer';
+import upload, { convertToWebP } from '../Middleware/multer';
 import asyncHandler from '../Middleware/asyncHandler';
 import { AuthRequest } from '../Middleware/auth';
 import { RequestHandler } from 'express';
@@ -12,7 +12,8 @@ const router = express.Router();
 router.post(
   '/gallery/photos', 
   authenticateUser as RequestHandler, 
-  upload.array('photos'), 
+  upload.array('photos'),
+  convertToWebP,
   asyncHandler<AuthRequest>(uploadGalleryPhotos)
 );
 

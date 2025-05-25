@@ -12,11 +12,11 @@ router.post(
   asyncHandler<AuthRequest>(createPost)
 );
 
-router.post(
-  '/posts/:postId/cover-photo',
-  authenticateUser as RequestHandler,
-  asyncHandler<AuthRequest>(setCoverPhoto)
-);
+// router.post(
+//   '/posts/:postId/cover-photo',
+//   authenticateUser as RequestHandler,
+//   asyncHandler<AuthRequest>(setCoverPhoto)
+// );
 
 router.get(
   '/posts',

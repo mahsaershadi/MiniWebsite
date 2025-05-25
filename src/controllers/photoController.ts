@@ -1,6 +1,6 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../Middleware/auth';
-import {Photo, User } from '../models';
+import { Photo, User } from '../models';
 
 export const uploadGalleryPhotos = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
@@ -11,7 +11,10 @@ export const uploadGalleryPhotos = async (req: AuthRequest, res: Response, next:
     if (!files || files.length === 0) return res.status(400).json({ error: 'No photos uploaded' });
 
     const photos = await Promise.all(
-      files.map(file => Photo.create({ filename: file.filename, userId }))
+      files.map(file => Photo.create({
+        filename: file.filename,
+        userId
+      }))
     );
 
     res.status(201).json(photos);
@@ -27,7 +30,12 @@ export const getGalleryPhotos = async (req: AuthRequest, res: Response, next: Ne
 
     const photos = await Photo.findAll({
       where: { userId },
-      include: [{ model: User, as: 'user', attributes: ['id', 'username'] }]
+      include: [{ 
+        model: User, 
+        as: 'user', 
+        attributes: ['id', 'username'] 
+      }],
+      attributes: ['id', 'filename', 'createdAt']
     });
 
     res.status(200).json(photos);
