@@ -25,7 +25,7 @@ export const signupHandler = async (req: Request, res: Response, next: NextFunct
     const token = jwt.sign(
       { id: user.id, username: user.username },
       process.env.ACCESS_TOKEN ?? 'default_secret',
-      { expiresIn: '3h' }
+      { expiresIn: '4h' }
     );
 
     return res.status(201).json({ message: 'User created successfully', token });

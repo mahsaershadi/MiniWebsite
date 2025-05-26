@@ -21,12 +21,6 @@ class Post extends Model<PostAttributes, PostCreationAttributes> implements Post
   public userId!: number;
   public cover_photo_id?: number;
   public status!: number;
-
-  // Association methods
-  public addGalleryPhotos!: (photoIds: number[]) => Promise<void>;
-  public setGalleryPhotos!: (photoIds: number[]) => Promise<void>;
-  public getGalleryPhotos!: () => Promise<Photo[]>;
-  public removeGalleryPhotos!: (photoIds: number[]) => Promise<void>;
 }
 
 Post.init({

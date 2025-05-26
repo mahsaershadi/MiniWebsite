@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import Post from '../models/post';
 import Photo from '../models/photo';
 import User from '../models/user';
+import PostGallery from '../models/postGallery';
 
 declare global {
   namespace Express {
@@ -17,7 +18,7 @@ declare global {
 //create a post
 export const createPost = async (req: Request, res: Response) => {
   try {
-    const { title, price, coverPhotoId, galleryPhotoIds } = req.body;
+    const { title, price, coverPhotoId, galleryPhotos } = req.body;
     
     if (!req.user) {
       return res.status(401).json({ message: 'Unauthorized' });
@@ -31,26 +32,25 @@ export const createPost = async (req: Request, res: Response) => {
       const photo = await Photo.findOne({
         where: {
           id: coverPhotoId,
-          userId: req.user.id,
           status: 1
         }
       });
       if (!photo) {
-        return res.status(404).json({ message: 'Cover photo not found or unauthorized' });
+        return res.status(404).json({ message: 'Cover photo not found' });
       }
     }
 
-    if (galleryPhotoIds && galleryPhotoIds.length > 0) {
+    if (galleryPhotos && galleryPhotos.length > 0) {
+      const photoIds = galleryPhotos.map((p: { photoId: number }) => p.photoId);
       const photos = await Photo.findAll({
         where: {
-          id: galleryPhotoIds,
-          userId: req.user.id,
+          id: photoIds,
           status: 1
         }
       });
 
-      if (photos.length !== galleryPhotoIds.length) {
-        return res.status(404).json({ message: 'One or more gallery photos not found or unauthorized' });
+      if (photos.length !== photoIds.length) {
+        return res.status(404).json({ message: 'One or more gallery photos not found' });
       }
     }
 
@@ -63,12 +63,19 @@ export const createPost = async (req: Request, res: Response) => {
       status: 1
     });
 
-    // Add gallery
-    if (galleryPhotoIds && galleryPhotoIds.length > 0) {
-      await post.addGalleryPhotos(galleryPhotoIds);
+    // Add gallery photos with order
+    if (galleryPhotos && galleryPhotos.length > 0) {
+      await Promise.all(
+        galleryPhotos.map((photo: { photoId: number, order: number }) =>
+          PostGallery.create({
+            postId: post.id,
+            photoId: photo.photoId,
+            order: photo.order
+          })
+        )
+      );
     }
 
-    // Return the post
     const createdPost = await Post.findByPk(post.id, {
       include: [
         {
@@ -80,15 +87,19 @@ export const createPost = async (req: Request, res: Response) => {
           model: Photo,
           as: 'galleryPhotos',
           attributes: ['id', 'filename'],
-          through: { attributes: [] }
+          through: {
+            attributes: ['order']
+          }
         }
-      ]
+      ],
+      order: [[{ model: Photo, as: 'galleryPhotos' }, PostGallery, 'order', 'ASC']]
     });
 
     res.status(201).json(createdPost);
   } catch (error) {
     console.error('Error creating post:', error);
-    res.status(500).json({ message: 'Failed to create post' });
+    const errorMessage = error instanceof Error ? error.message : String(error); //debugging
+    res.status(500).json({ message: 'Failed to create post', details: errorMessage }); //debugging
   }
 };
 
@@ -109,14 +120,16 @@ export const getUserPosts = async (req: Request, res: Response) => {
         model: Photo,
         as: 'galleryPhotos',
         attributes: ['id', 'filename'],
-        through: { attributes: [] }
+        through: {
+          attributes: ['order']
+        }
       }
-    ]
+    ],
+    order: [[{ model: Photo, as: 'galleryPhotos' }, PostGallery, 'order', 'ASC']]
   });
 
   res.json(posts);
 };
-
 
 //updated post
 export const updatePost = async (req: Request, res: Response) => {
@@ -126,9 +139,8 @@ export const updatePost = async (req: Request, res: Response) => {
     }
 
     const { postId } = req.params;
-    const { title, price, coverPhotoId, galleryPhotoIds } = req.body;
+    const { title, price, coverPhotoId, galleryPhotos } = req.body;
 
-    // Find the post
     const post = await Post.findOne({
       where: {
         id: postId,
@@ -145,39 +157,50 @@ export const updatePost = async (req: Request, res: Response) => {
       const photo = await Photo.findOne({
         where: {
           id: coverPhotoId,
-          userId: req.user.id,
           status: 1
         }
       });
       if (!photo) {
-        return res.status(404).json({ message: 'Cover photo not found or unauthorized' });
+        return res.status(404).json({ message: 'Cover photo not found' });
       }
     }
 
-    if (galleryPhotoIds && galleryPhotoIds.length > 0) {
-      const photos = await Photo.findAll({
-        where: {
-          id: galleryPhotoIds,
-          userId: req.user.id,
-          status: 1
-        }
-      });
-
-      if (photos.length !== galleryPhotoIds.length) {
-        return res.status(404).json({ message: 'One or more gallery photos not found or unauthorized' });
-      }
-    }
-
+    // Update
     const updates: any = {};
     if (title !== undefined) updates.title = title;
     if (price !== undefined) updates.price = price;
     if (coverPhotoId !== undefined) updates.cover_photo_id = coverPhotoId;
-
-    // Apply updates
     await post.update(updates);
 
-    if (galleryPhotoIds !== undefined) {
-      await post.setGalleryPhotos(galleryPhotoIds || []);
+    // Update gallery photos
+    if (galleryPhotos !== undefined) {
+      await PostGallery.destroy({
+        where: { postId: post.id }
+      });
+
+      if (galleryPhotos && galleryPhotos.length > 0) {
+        const photoIds = galleryPhotos.map((p: { photoId: number }) => p.photoId);
+        const photos = await Photo.findAll({
+          where: {
+            id: photoIds,
+            status: 1
+          }
+        });
+
+        if (photos.length !== photoIds.length) {
+          return res.status(404).json({ message: 'One or more gallery photos not found' });
+        }
+
+        await Promise.all(
+          galleryPhotos.map((photo: { photoId: number, order: number }) =>
+            PostGallery.create({
+              postId: post.id,
+              photoId: photo.photoId,
+              order: photo.order
+            })
+          )
+        );
+      }
     }
 
     const updatedPost = await Post.findByPk(post.id, {
@@ -191,9 +214,12 @@ export const updatePost = async (req: Request, res: Response) => {
           model: Photo,
           as: 'galleryPhotos',
           attributes: ['id', 'filename'],
-          through: { attributes: [] }
+          through: {
+            attributes: ['order']
+          }
         }
-      ]
+      ],
+      order: [[{ model: Photo, as: 'galleryPhotos' }, PostGallery, 'order', 'ASC']]
     });
 
     res.json(updatedPost);

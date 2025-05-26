@@ -17,7 +17,10 @@ class Photo extends Model<PhotoAttributes, PhotoCreationAttributes> implements P
   public userId!: number;
   public filename!: string;
   public status!: number;
-  public readonly post?: any;
+
+  // methods
+  public readonly posts?: Post[];
+  public readonly coverForPosts?: Post[];
 }
 
 Photo.init({
@@ -42,7 +45,7 @@ Photo.init({
     type: DataTypes.INTEGER,
     allowNull: false,
     defaultValue: 1 // 1 = active, -1 = deleted
-  }
+  },
 }, {
   sequelize,
   tableName: 'photos'

@@ -3,7 +3,7 @@ import { AuthRequest } from '../Middleware/auth';
 import { Photo, User } from '../models';
 
 
-///upload pic
+//upload pic
 export const uploadGalleryPhotos = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const files = req.files as Express.Multer.File[];
@@ -30,17 +30,10 @@ export const uploadGalleryPhotos = async (req: AuthRequest, res: Response, next:
 //get pics
 export const getGalleryPhotos = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: 'User not authenticated' });
-
     const photos = await Photo.findAll({
-      where: { userId , status: 1 },
-      include: [{ 
-        model: User, 
-        as: 'user', 
-        attributes: ['id', 'username'] 
-      }],
-      attributes: ['id', 'filename', 'createdAt']
+      where: { status: 1 },
+      attributes: ['id', 'filename', 'createdAt'],
+      order: [['createdAt', 'DESC']]
     });
 
     res.status(200).json(photos);
