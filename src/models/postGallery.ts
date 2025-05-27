@@ -5,12 +5,14 @@ interface PostGalleryAttributes {
   postId: number;
   photoId: number;
   order: number; 
+  status: number;
 }
 
 class PostGallery extends Model<PostGalleryAttributes> implements PostGalleryAttributes {
   public postId!: number;
   public photoId!: number;
   public order!: number;
+  public status!: number;
 }
 
 PostGallery.init({
@@ -34,6 +36,10 @@ PostGallery.init({
     type: DataTypes.INTEGER,
     allowNull: false,
     defaultValue: 0
+  },
+  status: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1
   }
 }, {
   sequelize,

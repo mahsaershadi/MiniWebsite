@@ -24,7 +24,7 @@ export const deletePost = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Post not found or unauthorized' });
     }
 
-    // Soft delete the post
+    // Soft delete
     await Post.update(
       { status: -1 },
       { where: { id: postId } }
@@ -59,7 +59,7 @@ export const deletePhoto = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Photo not found or unauthorized' });
     }
 
-    // Soft delete the photo
+    // Soft delete
     await Photo.update(
       { status: -1 },
       { where: { id: photoId } }

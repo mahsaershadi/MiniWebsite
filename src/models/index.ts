@@ -4,6 +4,9 @@ import Photo from './photo';
 import User from './user';
 import PostGallery from './postGallery';
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 const models = {
   User,
   Post,

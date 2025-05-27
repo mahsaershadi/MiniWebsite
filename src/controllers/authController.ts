@@ -43,7 +43,7 @@ export const loginHandler = async (req: Request, res: Response, next: NextFuncti
 
     const { username, password } = req.body as { username: string; password: string };
 
-    const user = await User.findOne({ where: { username } });
+    const user = await User.scope('withPassword').findOne({ where: { username } });
     if (!user) {
       return res.status(401).json({ error: 'Username or password is incorrect' });
     }
@@ -56,7 +56,7 @@ export const loginHandler = async (req: Request, res: Response, next: NextFuncti
     const token = jwt.sign(
       { id: user.id, username: user.username },
       process.env.ACCESS_TOKEN ?? 'default_secret',
-      { expiresIn: '3h' }
+      { expiresIn: '4h' }
     );
 
     return res.json({ message: 'Logged in successfully', token });

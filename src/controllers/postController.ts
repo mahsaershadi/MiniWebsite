@@ -70,7 +70,8 @@ export const createPost = async (req: Request, res: Response) => {
           PostGallery.create({
             postId: post.id,
             photoId: photo.photoId,
-            order: photo.order
+            order: photo.order,
+            status: 1
           })
         )
       );
@@ -114,14 +115,18 @@ export const getUserPosts = async (req: Request, res: Response) => {
       {
         model: Photo,
         as: 'coverPhoto',
-        attributes: ['id', 'filename']
+        attributes: ['id', 'filename'],
+        where: { status: 1 },
+        required: false 
       },
       {
         model: Photo,
         as: 'galleryPhotos',
         attributes: ['id', 'filename'],
+        where: { status: 1 },
         through: {
-          attributes: ['order']
+          attributes: ['order'],
+          where: { status: 1 }
         }
       }
     ],
@@ -196,7 +201,8 @@ export const updatePost = async (req: Request, res: Response) => {
             PostGallery.create({
               postId: post.id,
               photoId: photo.photoId,
-              order: photo.order
+              order: photo.order,
+              status: 1
             })
           )
         );
