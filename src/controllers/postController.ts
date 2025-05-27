@@ -54,7 +54,6 @@ export const createPost = async (req: Request, res: Response) => {
       }
     }
 
-    // Create the post
     const post = await Post.create({
       title,
       price,
