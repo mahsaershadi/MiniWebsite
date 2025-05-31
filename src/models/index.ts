@@ -3,6 +3,7 @@ import Post from './post';
 import Photo from './photo';
 import User from './user';
 import PostGallery from './postGallery';
+import Category from './category';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -11,7 +12,8 @@ const models = {
   User,
   Post,
   Photo,
-  PostGallery
+  PostGallery,
+  Category
 };
 
 // User 
@@ -38,4 +40,10 @@ Photo.belongsToMany(Post, {
   otherKey: 'postId'
 });
 
-export { Post, Photo, User, PostGallery, sequelize };
+//category
+Category.belongsTo(Category, { as: 'parent', foreignKey: 'parentId' });
+Category.hasMany(Category, { as: 'subcategories', foreignKey: 'parentId' });
+Category.hasMany(Post, { foreignKey: 'categoryId', as: 'posts' });
+Post.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+
+export { Post, Photo, User, PostGallery, Category, sequelize };

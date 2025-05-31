@@ -3,6 +3,7 @@ import Post from '../models/post';
 import Photo from '../models/photo';
 import User from '../models/user';
 import PostGallery from '../models/postGallery';
+import Category from '../models/category';
 
 declare global {
   namespace Express {
@@ -18,7 +19,7 @@ declare global {
 //create a post
 export const createPost = async (req: Request, res: Response) => {
   try {
-    const { title, price, coverPhotoId, galleryPhotos } = req.body;
+    const { title, price, categoryId, coverPhotoId, galleryPhotos } = req.body;
     
     if (!req.user) {
       return res.status(401).json({ message: 'Unauthorized' });
@@ -26,6 +27,15 @@ export const createPost = async (req: Request, res: Response) => {
 
     if (!title || !price) {
       return res.status(400).json({ message: 'Title and price are required' });
+    }
+
+    if (categoryId) {
+      const category = await Category.findOne({
+        where: { id: categoryId, status: 1 }
+      });
+      if (!category) {
+        return res.status(404).json({ message: 'Category not found' });
+      }
     }
 
     if (coverPhotoId) {
@@ -58,6 +68,7 @@ export const createPost = async (req: Request, res: Response) => {
       title,
       price,
       userId: req.user.id,
+      categoryId: categoryId || null,
       cover_photo_id: coverPhotoId || null,
       status: 1
     });
@@ -111,6 +122,11 @@ export const getUserPosts = async (req: Request, res: Response) => {
   const posts = await Post.findAll({
     where: { userId: req.user.id, status: 1 },
     include: [
+      {
+        model: Category,
+        as: 'category',
+        attributes: ['id', 'name']
+      },
       {
         model: Photo,
         as: 'coverPhoto',

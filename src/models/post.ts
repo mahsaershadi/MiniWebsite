@@ -9,6 +9,7 @@ interface PostAttributes {
   price: number;
   userId: number;
   cover_photo_id?: number;
+  categoryId: number | null;
   status: number;
 }
 
@@ -20,6 +21,7 @@ class Post extends Model<PostAttributes, PostCreationAttributes> implements Post
   public price!: number;
   public userId!: number;
   public cover_photo_id?: number;
+  public categoryId!: number | null;
   public status!: number;
 }
 
@@ -46,6 +48,14 @@ Post.init({
     type: DataTypes.INTEGER,
     allowNull: true,
     references: { model: Photo, key: 'id' }
+  },
+  categoryId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'categories',
+      key: 'id'
+    }
   },
   status: {
     type: DataTypes.INTEGER,
