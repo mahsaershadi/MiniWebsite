@@ -11,6 +11,7 @@ interface PostAttributes {
   cover_photo_id?: number;
   categoryId: number | null;
   status: number;
+  stock_quantity: number; 
 }
 
 interface PostCreationAttributes extends Optional<PostAttributes, 'id' | 'cover_photo_id'> {}
@@ -23,6 +24,7 @@ class Post extends Model<PostAttributes, PostCreationAttributes> implements Post
   public cover_photo_id?: number;
   public categoryId!: number | null;
   public status!: number;
+  public stock_quantity!: number;
 }
 
 Post.init({
@@ -60,11 +62,15 @@ Post.init({
   status: {
     type: DataTypes.INTEGER,
     defaultValue: 1 // 1 = active, -1 = deleted
+  },
+  stock_quantity: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0
   }
 }, {
   sequelize,
   tableName: 'posts',
-  //timestamps: false 
 });
 
 

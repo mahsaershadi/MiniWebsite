@@ -19,12 +19,12 @@ declare global {
 //create a post
 export const createPost = async (req: Request, res: Response) => {
   try {
-    const { title, price, categoryId, coverPhotoId, galleryPhotos } = req.body;
-    
     if (!req.user) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
+    const { title, price, categoryId, coverPhotoId, galleryPhotos, stock_quantity = 0 } = req.body;
+    
     if (!title || !price) {
       return res.status(400).json({ message: 'Title and price are required' });
     }
@@ -70,7 +70,8 @@ export const createPost = async (req: Request, res: Response) => {
       userId: req.user.id,
       categoryId: categoryId || null,
       cover_photo_id: coverPhotoId || null,
-      status: 1
+      status: 1,
+      stock_quantity
     });
 
     // Add gallery photos with order
@@ -159,7 +160,7 @@ export const updatePost = async (req: Request, res: Response) => {
     }
 
     const { postId } = req.params;
-    const { title, price, coverPhotoId, galleryPhotos } = req.body;
+    const { title, price, coverPhotoId, galleryPhotos, stock_quantity } = req.body;
 
     const post = await Post.findOne({
       where: {
@@ -190,6 +191,7 @@ export const updatePost = async (req: Request, res: Response) => {
     if (title !== undefined) updates.title = title;
     if (price !== undefined) updates.price = price;
     if (coverPhotoId !== undefined) updates.cover_photo_id = coverPhotoId;
+    if (stock_quantity !== undefined) updates.stock_quantity = stock_quantity;
     await post.update(updates);
 
     // Update gallery photos

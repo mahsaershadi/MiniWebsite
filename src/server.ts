@@ -6,6 +6,7 @@ import authRoutes from './routes/authRoutes';
 import deleteRoutes from './routes/deleteRoutes';
 import { sequelize } from './models';
 import categoryRoutes from './routes/categoryRoutes';
+import cartRoutes from './routes/cartRoutes';
 
 const app = express();
 
@@ -17,6 +18,7 @@ app.use('/api', postRoutes);
 app.use('/api', galleryRoutes);
 app.use('/api', deleteRoutes);
 app.use('/api', categoryRoutes);
+app.use('/api', cartRoutes);
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);

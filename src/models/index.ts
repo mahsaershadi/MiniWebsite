@@ -4,6 +4,8 @@ import Photo from './photo';
 import User from './user';
 import PostGallery from './postGallery';
 import Category from './category';
+import CartItem from './cart';
+
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -45,5 +47,10 @@ Category.belongsTo(Category, { as: 'parent', foreignKey: 'parentId' });
 Category.hasMany(Category, { as: 'subcategories', foreignKey: 'parentId' });
 Category.hasMany(Post, { foreignKey: 'categoryId', as: 'posts' });
 Post.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+
+//cart
+CartItem.belongsTo(User, { foreignKey: 'userId' });
+CartItem.belongsTo(Post, { foreignKey: 'postId' });
+
 
 export { Post, Photo, User, PostGallery, Category, sequelize };

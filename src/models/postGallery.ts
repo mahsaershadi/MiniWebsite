@@ -43,8 +43,8 @@ PostGallery.init({
   }
 }, {
   sequelize,
-  tableName: 'post_galleries',
-  timestamps: true
+  tableName: 'post_gallery',
+  timestamps: false
 });
 
 export default PostGallery; 

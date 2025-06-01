@@ -2,6 +2,13 @@ import { Request, Response } from 'express';
 import Category from '../models/category';
 import { Post, Photo, PostGallery } from '../models';
 
+interface CategoryWithParent extends Category {
+  parent?: {
+    id: number;
+    name: string;
+  } | null;
+}
+
 //Create category
 export const createCategory = async (req: Request, res: Response) => {
   try {

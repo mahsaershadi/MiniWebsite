@@ -48,7 +48,8 @@ Photo.init({
   },
 }, {
   sequelize,
-  tableName: 'photos'
+  tableName: 'photos',
+  timestamps: false
 });
 
 export default Photo;

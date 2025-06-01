@@ -46,6 +46,7 @@ User.init({
 }, {
   sequelize,
   tableName: 'users',
+  timestamps: false,
   defaultScope: {
     where: {
       status: 1

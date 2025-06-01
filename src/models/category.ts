@@ -42,9 +42,7 @@ Category.init({
 }, {
   sequelize,
   tableName: 'categories',
-  underscored: false,
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  timestamps: false
 });
 
 export default Category;
