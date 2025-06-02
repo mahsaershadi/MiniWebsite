@@ -71,7 +71,7 @@ export const createPost = async (req: Request, res: Response) => {
       categoryId: categoryId || null,
       cover_photo_id: coverPhotoId || null,
       status: 1,
-      stock_quantity
+      stock_quantity,
     });
 
     // Add gallery photos with order

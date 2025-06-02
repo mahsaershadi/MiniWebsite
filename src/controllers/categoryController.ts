@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import Category from '../models/category';
 import { Post, Photo, PostGallery } from '../models';
+import { Op } from 'sequelize';
+import { Sequelize } from 'sequelize';
 
 interface CategoryWithParent extends Category {
   parent?: {
@@ -8,6 +10,30 @@ interface CategoryWithParent extends Category {
     name: string;
   } | null;
 }
+
+interface CategoryWithSubcategories extends Category {
+  subcategories?: CategoryWithSubcategories[];
+}
+
+//subs
+const getAllSubcategoryIds = async (categoryId: number): Promise<number[]> => {
+  const allIds: number[] = [];
+  
+  const subcategories = await Category.findAll({
+    where: {
+      parentId: categoryId,
+      status: 1
+    }
+  });
+
+  for (const sub of subcategories) {
+    allIds.push(sub.id);
+    const childIds = await getAllSubcategoryIds(sub.id);
+    allIds.push(...childIds);
+  }
+
+  return allIds;
+};
 
 //Create category
 export const createCategory = async (req: Request, res: Response) => {
@@ -47,7 +73,13 @@ export const getCategories = async (req: Request, res: Response) => {
         model: Category,
         as: 'subcategories',
         where: { status: 1 },
-        required: false
+        required: false,
+        include: [{
+          model: Category,
+          as: 'subcategories',
+          where: { status: 1 },
+          required: false
+        }]
       }]
     });
 
@@ -62,23 +94,70 @@ export const getCategories = async (req: Request, res: Response) => {
 export const getPostsByCategory = async (req: Request, res: Response) => {
   try {
     const { categoryId } = req.params;
-
-    const category = await Category.findOne({
-      where: { 
-        id: categoryId,
-        status: 1
+    const { ispost, limit = '10', orderby = 'desc' } = req.query;
+    
+    let parsedLimit: number;
+    try {
+      parsedLimit = parseInt(limit as string);
+      if (isNaN(parsedLimit) || parsedLimit < 1) {
+        return res.status(400).json({ message: 'Limit must be a positive number' });
       }
-    });
-
-    if (!category) {
-      return res.status(404).json({ message: 'Category not found' });
+    } catch (error) {
+      console.error('Error parsing limit:', error);
+      return res.status(400).json({ message: 'Invalid limit parameter' });
     }
 
-    const posts = await Post.findAll({
-      where: { 
-        categoryId,
-        status: 1
+    const order = (orderby as string)?.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+    const allCategoryIds = await getAllSubcategoryIds(parseInt(categoryId));
+    allCategoryIds.push(parseInt(categoryId)); 
+
+    let category = null;
+    if (ispost !== 'true') {
+      category = await Category.findOne({
+        where: { 
+          id: categoryId,
+          status: 1
+        },
+        include: [{
+          model: Category,
+          as: 'subcategories',
+          where: { status: 1 },
+          required: false,
+          include: [{
+            model: Category,
+            as: 'subcategories',
+            where: { status: 1 },
+            required: false
+          }]
+        }]
+      });
+
+      if (!category) {
+        return res.status(404).json({ message: 'Category not found' });
+      }
+    } else {
+      const categoryExists = await Category.findOne({
+        where: { 
+          id: categoryId,
+          status: 1
+        }
+      });
+
+      if (!categoryExists) {
+        return res.status(404).json({ message: 'Category not found' });
+      }
+    }
+
+    const whereClause = {
+      categoryId: {
+        [Op.in]: allCategoryIds
       },
+      status: 1
+    };
+
+    const posts = await Post.findAll({
+      where: whereClause,
       include: [
         {
           model: Photo,
@@ -95,24 +174,41 @@ export const getPostsByCategory = async (req: Request, res: Response) => {
           through: {
             attributes: ['order'],
             where: { status: 1 }
-          }
+          },
+          required: false
         },
         {
           model: Category,
           as: 'category',
-          attributes: ['id', 'name']
+          attributes: ['id', 'name', 'parentId'],
+          where: { status: 1 },
+          required: true
         }
       ],
       order: [
-        ['createdAt', 'DESC'],
+        ['createdAt', order],
         [{ model: Photo, as: 'galleryPhotos' }, PostGallery, 'order', 'ASC']
-      ]
+      ],
+      limit: parsedLimit
     });
 
-    res.json(posts);
+    if (ispost === 'true') {
+      res.json({
+        posts
+      });
+    } else {
+      res.json({
+        category,
+        posts
+      });
+    }
   } catch (error) {
     console.error('Error fetching posts by category:', error);
-    res.status(500).json({ message: 'Failed to fetch posts' });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ 
+      message: 'Failed to fetch posts',
+      details: errorMessage
+    });
   }
 };
 
