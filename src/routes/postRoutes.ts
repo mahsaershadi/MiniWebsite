@@ -1,5 +1,5 @@
 import express, { RequestHandler } from 'express';
-import { createPost, getUserPosts, updatePost } from '../controllers/postController';
+import { createPost, getUserPosts, updatePost, searchPosts } from '../controllers/postController';
 import authenticateUser from '../Middleware/auth';
 import asyncHandler from '../Middleware/asyncHandler';
 import { AuthRequest } from '../Middleware/auth';
@@ -26,5 +26,8 @@ router.get(
   authenticateUser as RequestHandler,
   asyncHandler<AuthRequest>(getUserPosts)
 );
+
+// Search posts
+router.get('/posts/search', searchPosts);
 
 export default router;

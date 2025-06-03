@@ -12,9 +12,15 @@ interface PostAttributes {
   categoryId: number | null;
   status: number;
   stock_quantity: number;
+  color?: string;
+  size?: string;
+  brand?: string;
+  type?: string;
+  description?: string;
+  specifications?: object;
 }
 
-interface PostCreationAttributes extends Optional<PostAttributes, 'id' | 'cover_photo_id'> {}
+interface PostCreationAttributes extends Optional<PostAttributes, 'id' | 'cover_photo_id' | 'color' | 'size' | 'brand' | 'type' | 'description' | 'specifications'> {}
 
 class Post extends Model<PostAttributes, PostCreationAttributes> implements PostAttributes {
   public id!: number;
@@ -25,6 +31,12 @@ class Post extends Model<PostAttributes, PostCreationAttributes> implements Post
   public categoryId!: number | null;
   public status!: number;
   public stock_quantity!: number;
+  public color?: string;
+  public size?: string;
+  public brand?: string;
+  public type?: string;
+  public description?: string;
+  public specifications?: object;
 }
 
 Post.init({
@@ -68,6 +80,30 @@ Post.init({
     allowNull: false,
     defaultValue: 0
   },
+  color: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  size: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  brand: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  type: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  specifications: {
+    type: DataTypes.JSONB,
+    allowNull: true
+  }
 }, {
   sequelize,
   tableName: 'posts',

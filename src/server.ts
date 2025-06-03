@@ -7,15 +7,19 @@ import deleteRoutes from './routes/deleteRoutes';
 import { sequelize } from './models';
 import categoryRoutes from './routes/categoryRoutes';
 import cartRoutes from './routes/cartRoutes';
+import cors from 'cors';
 
 const app = express();
 
+// Middleware
+app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-app.use('/api', authRoutes);
+// Routes
 app.use('/api', postRoutes);
 app.use('/api', galleryRoutes);
+app.use('/api', authRoutes);
 app.use('/api', deleteRoutes);
 app.use('/api', categoryRoutes);
 app.use('/api', cartRoutes);

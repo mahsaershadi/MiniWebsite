@@ -34,6 +34,10 @@ interface CartItemResult {
   total: number;
 }
 
+interface CartTotalResult {
+  cartTotal: string | null;
+}
+
 const router = express.Router();
 
 //Add item
@@ -131,7 +135,6 @@ router.get('/cart', authenticateUser, async (req: CustomRequest, res: Response):
       raw: true
     }) as unknown as CartItemResult[];
 
-
     const formattedItems = cartItems.map(item => ({
       id: item.id,
       userId: item.userId,
@@ -146,12 +149,28 @@ router.get('/cart', authenticateUser, async (req: CustomRequest, res: Response):
       total: Number((item['Post.price'] * item.quantity).toFixed(2))
     }));
 
-    //Calculate
-    const cartTotal = formattedItems.reduce((sum, item) => sum + item.total, 0);
+    //sum
+    const result = (await CartItem.findAll({
+      where: { userId: userId },
+      attributes: [
+        [
+          Sequelize.literal('SUM(("CartItem".quantity * "Post".price)::numeric)'),
+          'cartTotal'
+        ]
+      ],
+      include: [{
+        model: Post,
+        attributes: [],
+        required: true
+      }],
+      raw: true
+    })) as unknown as CartTotalResult[];
+
+    const cartTotal = result[0]?.cartTotal || '0';
 
     res.status(200).json({
       items: formattedItems,
-      total: Number(cartTotal.toFixed(2))
+      total: Number(cartTotal)
     });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching cart', error });
@@ -159,7 +178,7 @@ router.get('/cart', authenticateUser, async (req: CustomRequest, res: Response):
 });
 
 
-//Update cart item quantity
+//Update cart
 router.put('/cart/:postId', authenticateUser, async (req: CustomRequest, res: Response): Promise<void> => {
   const t = await sequelize.transaction();
   
