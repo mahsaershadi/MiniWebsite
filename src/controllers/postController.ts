@@ -370,13 +370,24 @@ export const searchPosts = async (req: Request, res: Response) => {
     if (query) {
       whereClause[Op.or] = [
         { title: { [Op.iLike]: `%${query}%` } },
-        { description: { [Op.iLike]: `%${query}%` } }
+        { description: { [Op.iLike]: `%${query}%` } },
+        sequelize.literal(`exists (select 1 from jsonb_each_text("specifications") where value ILIKE '%${query}%')`)
       ];
     }
 
     //Add filters
     if (categoryId) whereClause.categoryId = parseInt(categoryId);
-    if (color) whereClause.color = { [Op.iLike]: color };
+    if (color) {
+      const colorsArray = color.split(',');
+      whereClause.color = {
+        [Op.or]: [
+          { [Op.in]: colorsArray },
+          ...colorsArray.map(c => ({
+            [Op.iLike]: `%${c}%`    
+          }))
+        ]
+      };
+    }
     if (size) whereClause.size = { [Op.iLike]: size };
     if (brand) whereClause.brand = { [Op.iLike]: brand };
     if (type) whereClause.type = { [Op.iLike]: type };
