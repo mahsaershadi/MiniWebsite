@@ -5,6 +5,7 @@ import User from './user';
 import PostGallery from './postGallery';
 import Category from './category';
 import CartItem from './cart';
+import CategoryFilter from './categoryFilter';
 
 
 import dotenv from 'dotenv';
@@ -15,7 +16,8 @@ const models = {
   Post,
   Photo,
   PostGallery,
-  Category
+  Category,
+  CategoryFilter
 };
 
 // User 
@@ -47,10 +49,11 @@ Category.belongsTo(Category, { as: 'parent', foreignKey: 'parentId' });
 Category.hasMany(Category, { as: 'subcategories', foreignKey: 'parentId' });
 Category.hasMany(Post, { foreignKey: 'categoryId', as: 'posts' });
 Post.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+Category.hasMany(CategoryFilter, {foreignKey: 'category_id', as: 'filters'});
 
 //cart
 CartItem.belongsTo(User, { foreignKey: 'userId' });
 CartItem.belongsTo(Post, { foreignKey: 'postId' });
 
 
-export { Post, Photo, User, PostGallery, Category, sequelize };
+export { Post, Photo, User, PostGallery, Category, sequelize, CategoryFilter };

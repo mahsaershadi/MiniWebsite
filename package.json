@@ -4,7 +4,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "ts-node src/server.js"
+    "dev": "ts-node src/server.js",
+    "migrate": "ts-node src/utils/runMigration.ts"
   },
   "keywords": [],
   "author": "",

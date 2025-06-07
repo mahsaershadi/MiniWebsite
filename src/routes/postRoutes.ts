@@ -28,6 +28,6 @@ router.get(
 );
 
 // Search posts
-router.get('/posts/search', searchPosts);
+router.get('/posts/search', asyncHandler(searchPosts));
 
 export default router;

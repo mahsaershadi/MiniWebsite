@@ -1,83 +1,102 @@
-import { DataTypes, Model, Optional } from 'sequelize';
-import sequelize  from '../utils/database';
-import User from './user';
-import Photo from './photo';
+import { DataTypes, Model, Optional } from "sequelize";
+import sequelize from "../utils/database";
+import Category from "./category";
+import User from "./user";
 
 interface PostAttributes {
   id: number;
   title: string;
+  description: string;
   price: number;
   userId: number;
-  cover_photo_id?: number;
   categoryId: number | null;
+  cover_photo_id: number | null;
   status: number;
   stock_quantity: number;
-  description?: string;
+  attributes: Record<string, any>;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
-interface PostCreationAttributes extends Optional<PostAttributes, 'id' | 'cover_photo_id' | 'description'> {}
+interface PostCreationAttributes extends Optional<PostAttributes, 'id'> {}
 
 class Post extends Model<PostAttributes, PostCreationAttributes> implements PostAttributes {
   public id!: number;
   public title!: string;
+  public description!: string;
   public price!: number;
   public userId!: number;
-  public cover_photo_id?: number;
   public categoryId!: number | null;
+  public cover_photo_id!: number | null;
   public status!: number;
   public stock_quantity!: number;
-  public description?: string;
+  public attributes!: Record<string, any>;
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
 }
 
-Post.init({
-  id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
-    primaryKey: true
+Post.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    title: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    price: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+    },
+    userId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: User,
+        key: 'id',
+      },
+    },
+    categoryId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: Category,
+        key: 'id',
+      },
+    },
+    cover_photo_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    status: {
+      type: DataTypes.INTEGER,
+      defaultValue: 1,
+    },
+    stock_quantity: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    attributes: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: {},
+      validate: {
+        isValidAttributes(value: any) {
+        }
+      }
+    },
   },
-  title: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  price: {
-    type: DataTypes.FLOAT,
-    allowNull: false
-  },
-  userId: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: { model: User, key: 'id' }
-  },
-  cover_photo_id: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: { model: Photo, key: 'id' }
-  },
-  categoryId: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: {
-      model: 'categories',
-      key: 'id'
-    }
-  },
-  status: {
-    type: DataTypes.INTEGER,
-    defaultValue: 1 // 1 = active, -1 = deleted
-  },
-  stock_quantity: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 0
-  },
-  description: {
-    type: DataTypes.TEXT,
-    allowNull: true
+  {
+    sequelize,
+    tableName: 'posts',
+    timestamps: true,
   }
-}, {
-  sequelize,
-  tableName: 'posts',
-});
-
+);
 
 export default Post;

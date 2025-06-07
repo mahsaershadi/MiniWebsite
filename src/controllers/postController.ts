@@ -6,6 +6,7 @@ import PostGallery from '../models/postGallery';
 import Category from '../models/category';
 import { Op, Sequelize, QueryTypes } from 'sequelize';
 import sequelize from '../utils/database';
+import CategoryFilter from '../models/categoryFilter';
 
 declare global {
   namespace Express {
@@ -16,6 +17,32 @@ declare global {
       user?: User;
     }
   }
+}
+
+//get all subcategory ID
+async function getAllSubcategoryIds(categoryId: number): Promise<number[]> {
+  const subCategories = await Category.findAll({
+    where: { parentId: categoryId, status: 1 }
+  });
+
+  const subCategoryIds = subCategories.map(cat => cat.id);
+  for (const subCategory of subCategories) {
+    const childIds = await getAllSubcategoryIds(subCategory.id);
+    subCategoryIds.push(...childIds);
+  }
+
+  return subCategoryIds;
+}
+
+interface CreatePostBody {
+  title: string;
+  price: number;
+  categoryId?: number;
+  coverPhotoId?: number;
+  galleryPhotos?: Array<{ photoId: number; order: number }>;
+  stock_quantity?: number;
+  description: string;
+  attributes?: Record<string, any>;
 }
 
 //create a post
@@ -33,7 +60,8 @@ export const createPost = async (req: Request, res: Response) => {
       galleryPhotos, 
       stock_quantity = 0,
       description,
-    } = req.body;
+      attributes = {}
+    } = req.body as CreatePostBody;
     
     if (!title || !price) {
       return res.status(400).json({ message: 'Title and price are required' });
@@ -83,6 +111,7 @@ export const createPost = async (req: Request, res: Response) => {
       status: 1,
       stock_quantity,
       description,
+      attributes
     });
 
     //Add gallery photos
@@ -310,63 +339,160 @@ export const searchPosts = async (req: Request, res: Response) => {
   try {
     const {
       query,
-      categoryId,
+      categoryIds,
       minPrice,
       maxPrice,
       sort = 'createdAt',
       order = 'DESC',
       page = '1',
-      limit = '10'
+      limit = '10',
+      includeSubcategories = 'true',
+      filters
     } = req.query as {
       query?: string;
-      categoryId?: string;
+      categoryIds?: string;
       minPrice?: string;
       maxPrice?: string;
       sort?: string;
       order?: string;
       page?: string;
       limit?: string;
+      includeSubcategories?: string;
+      filters?: string;
     };
 
     const whereClause: any = {
       status: 1
     };
 
-    //search in title and description
+    //Search in title and description
     if (query) {
       whereClause[Op.or] = [
         { title: { [Op.iLike]: `%${query}%` } },
-        { description: { [Op.iLike]: `%${query}%` } },
-        sequelize.literal(`exists (select 1 from jsonb_each_text("specifications") where value ILIKE '%${query}%')`)
+        { description: { [Op.iLike]: `%${query}%` } }
       ];
     }
 
-    //Add filters
-    if (categoryId) whereClause.categoryId = parseInt(categoryId);
-
-    //Price range
-    if (minPrice || maxPrice) {
-      whereClause.price = {};
-      if (minPrice) whereClause.price[Op.gte] = parseFloat(minPrice);
-      if (maxPrice) whereClause.price[Op.lte] = parseFloat(maxPrice);
+    //Category filtering
+    if (categoryIds) {
+      const selectedCategoryIds = categoryIds.split(',').map(id => parseInt(id));
+      
+      if (includeSubcategories === 'true') {
+        const allCategoryIds = new Set<number>();
+        
+        for (const categoryId of selectedCategoryIds) {
+          const subCategoryIds = await getAllSubcategoryIds(categoryId);
+          subCategoryIds.forEach(id => allCategoryIds.add(id));
+          allCategoryIds.add(categoryId);
+        }
+        
+        whereClause.categoryId = {
+          [Op.in]: Array.from(allCategoryIds)
+        };
+      } else {
+        whereClause.categoryId = {
+          [Op.in]: selectedCategoryIds
+        };
+      }
     }
 
-    //offset
-    const offset = (Number(page) - 1) * Number(limit);
+    //filters
+    if (filters) {
+      try {
+        const filterValues = JSON.parse(filters);
+        const filterConditions: any[] = [];
 
-    //sort field
-    const validSortFields = ['price', 'createdAt', 'title'] as const;
+        Object.entries(filterValues).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            if (key === 'price') {
+              if (typeof value === 'object' && ('min' in value || 'max' in value)) {
+                whereClause.price = {};
+                if ('min' in value && value.min !== null) {
+                  whereClause.price[Op.gte] = value.min;
+                }
+                if ('max' in value && value.max !== null) {
+                  whereClause.price[Op.lte] = value.max;
+                }
+              }
+            } else if (Array.isArray(value)) {
+              filterConditions.push(
+                sequelize.literal(
+                  `attributes->>'${key}' IN (${value.map(v => `'${v}'`).join(',')}) OR ` +
+                  `(attributes->'${key}' ?| array[${value.map(v => `'${v}'`).join(',')}])`
+                )
+              );
+            } else if (typeof value === 'object' && ('min' in value || 'max' in value)) {
+              //For range values
+              const rangeConditions = [];
+              if ('min' in value && value.min !== null) {
+                rangeConditions.push(
+                  sequelize.literal(`(attributes->>'${key}')::numeric >= ${value.min}`)
+                );
+              }
+              if ('max' in value && value.max !== null) {
+                rangeConditions.push(
+                  sequelize.literal(`(attributes->>'${key}')::numeric <= ${value.max}`)
+                );
+              }
+              if (rangeConditions.length > 0) {
+                filterConditions.push({ [Op.and]: rangeConditions });
+              }
+            } else {
+              filterConditions.push(
+                sequelize.literal(`attributes->>'${key}' = '${value}'`)
+              );
+            }
+          }
+        });
+
+        if (filterConditions.length > 0) {
+          whereClause[Op.and] = filterConditions;
+        }
+      } catch (error) {
+        console.error('Error parsing filters:', error);
+        return res.status(400).json({ 
+          message: 'Invalid filter format',
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+    }
+
+    // // Add regular price range if provided separately
+    // if (minPrice || maxPrice) {
+    //   whereClause.price = whereClause.price || {};
+    //   if (minPrice) whereClause.price[Op.gte] = parseFloat(minPrice);
+    //   if (maxPrice) whereClause.price[Op.lte] = parseFloat(maxPrice);
+    // }
+
+    const offset = (Number(page) - 1) * Number(limit);
+    const validSortFields = ['createdAt', 'price', 'title'] as const;
     type SortField = typeof validSortFields[number];
+    
     const sortField = validSortFields.includes(sort as SortField) ? sort as SortField : 'createdAt';
     const sortOrder = order === 'ASC' ? 'ASC' : 'DESC';
 
+    //Get posts with category information and filters
     const { count, rows: posts } = await Post.findAndCountAll({
       where: whereClause,
       include: [
         {
           model: Category,
           as: 'category',
-          attributes: ['id', 'name']
+          attributes: ['id', 'name', 'parentId'],
+          include: [
+            {
+              model: Category,
+              as: 'parent',
+              attributes: ['id', 'name']
+            },
+            {
+              model: CategoryFilter,
+              as: 'filters',
+              attributes: ['id', 'category_id', 'name', 'type', 'options', 'min', 'max', 'required', 'order', 'status'],
+              where: { status: 1 },
+              required: false
+            }
+          ]
         },
         {
           model: Photo,
@@ -381,28 +507,19 @@ export const searchPosts = async (req: Request, res: Response) => {
       offset: offset
     });
 
-    const filterQueries = [];
-    const filterResults = {};
-
-        
-    const filters: any = {};
-    let resultIndex = 0;
-
-  
     res.json({
       posts,
-      filters,
       pagination: {
         total: count,
         page: Number(page),
         totalPages: Math.ceil(count / Number(limit))
       }
     });
-
+    
   } catch (error) {
     console.error('Error searching posts:', error);
     res.status(500).json({ 
-      message: 'Error searching posts',
+      message: 'Failed to search posts',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
