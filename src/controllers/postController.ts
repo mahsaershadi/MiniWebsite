@@ -32,12 +32,7 @@ export const createPost = async (req: Request, res: Response) => {
       coverPhotoId, 
       galleryPhotos, 
       stock_quantity = 0,
-      color,
-      size,
-      brand,
-      type,
       description,
-      specifications
     } = req.body;
     
     if (!title || !price) {
@@ -87,12 +82,7 @@ export const createPost = async (req: Request, res: Response) => {
       cover_photo_id: coverPhotoId || null,
       status: 1,
       stock_quantity,
-      color,
-      size,
-      brand,
-      type,
       description,
-      specifications
     });
 
     //Add gallery photos
@@ -152,12 +142,7 @@ export const getUserPosts = async (req: Request, res: Response) => {
       'categoryId',
       'status',
       'stock_quantity',
-      'color',
-      'size',
-      'brand',
-      'type',
       'description',
-      'specifications',
       'createdAt',
       'updatedAt'
     ],
@@ -208,12 +193,7 @@ export const updatePost = async (req: Request, res: Response) => {
       coverPhotoId, 
       galleryPhotos, 
       stock_quantity,
-      color,
-      size,
-      brand,
-      type,
       description,
-      specifications,
       categoryId
     } = req.body;
 
@@ -257,12 +237,7 @@ export const updatePost = async (req: Request, res: Response) => {
     if (price !== undefined) updates.price = price;
     if (coverPhotoId !== undefined) updates.cover_photo_id = coverPhotoId;
     if (stock_quantity !== undefined) updates.stock_quantity = stock_quantity;
-    if (color !== undefined) updates.color = color;
-    if (size !== undefined) updates.size = size;
-    if (brand !== undefined) updates.brand = brand;
-    if (type !== undefined) updates.type = type;
     if (description !== undefined) updates.description = description;
-    if (specifications !== undefined) updates.specifications = specifications;
     if (categoryId !== undefined) updates.categoryId = categoryId;
 
     await post.update(updates);
@@ -336,10 +311,6 @@ export const searchPosts = async (req: Request, res: Response) => {
     const {
       query,
       categoryId,
-      color,
-      size,
-      brand,
-      type,
       minPrice,
       maxPrice,
       sort = 'createdAt',
@@ -349,10 +320,6 @@ export const searchPosts = async (req: Request, res: Response) => {
     } = req.query as {
       query?: string;
       categoryId?: string;
-      color?: string;
-      size?: string;
-      brand?: string;
-      type?: string;
       minPrice?: string;
       maxPrice?: string;
       sort?: string;
@@ -361,7 +328,6 @@ export const searchPosts = async (req: Request, res: Response) => {
       limit?: string;
     };
 
-    
     const whereClause: any = {
       status: 1
     };
@@ -377,20 +343,6 @@ export const searchPosts = async (req: Request, res: Response) => {
 
     //Add filters
     if (categoryId) whereClause.categoryId = parseInt(categoryId);
-    if (color) {
-      const colorsArray = color.split(',');
-      whereClause.color = {
-        [Op.or]: [
-          { [Op.in]: colorsArray },
-          ...colorsArray.map(c => ({
-            [Op.iLike]: `%${c}%`    
-          }))
-        ]
-      };
-    }
-    if (size) whereClause.size = { [Op.iLike]: size };
-    if (brand) whereClause.brand = { [Op.iLike]: brand };
-    if (type) whereClause.type = { [Op.iLike]: type };
 
     //Price range
     if (minPrice || maxPrice) {
@@ -429,91 +381,14 @@ export const searchPosts = async (req: Request, res: Response) => {
       offset: offset
     });
 
-    
     const filterQueries = [];
     const filterResults = {};
 
-    if (color) {
-      filterQueries.push(
-        sequelize.query(
-          'SELECT DISTINCT color FROM posts WHERE status = 1 AND color ILIKE :color',
-          { 
-            replacements: { color: `%${color}%` },
-            type: QueryTypes.SELECT 
-          }
-        )
-      );
-    }
-
-    if (size) {
-      filterQueries.push(
-        sequelize.query(
-          'SELECT DISTINCT size FROM posts WHERE status = 1 AND size ILIKE :size',
-          { 
-            replacements: { size: `%${size}%` },
-            type: QueryTypes.SELECT 
-          }
-        )
-      );
-    }
-
-    if (brand) {
-      filterQueries.push(
-        sequelize.query(
-          'SELECT DISTINCT brand FROM posts WHERE status = 1 AND brand ILIKE :brand',
-          { 
-            replacements: { brand: `%${brand}%` },
-            type: QueryTypes.SELECT 
-          }
-        )
-      );
-    }
-
-    if (type) {
-      filterQueries.push(
-        sequelize.query(
-          'SELECT DISTINCT type FROM posts WHERE status = 1 AND type ILIKE :type',
-          { 
-            replacements: { type: `%${type}%` },
-            type: QueryTypes.SELECT 
-          }
-        )
-      );
-    }
-
-    const results = await Promise.all(filterQueries);
-    
-    
+        
     const filters: any = {};
     let resultIndex = 0;
 
-    if (color) {
-      filters.colors = (results[resultIndex] as Array<{ color: string }>)
-        .map(item => item.color)
-        .filter(Boolean);
-      resultIndex++;
-    }
-
-    if (size) {
-      filters.sizes = (results[resultIndex] as Array<{ size: string }>)
-        .map(item => item.size)
-        .filter(Boolean);
-      resultIndex++;
-    }
-
-    if (brand) {
-      filters.brands = (results[resultIndex] as Array<{ brand: string }>)
-        .map(item => item.brand)
-        .filter(Boolean);
-      resultIndex++;
-    }
-
-    if (type) {
-      filters.types = (results[resultIndex] as Array<{ type: string }>)
-        .map(item => item.type)
-        .filter(Boolean);
-    }
-
+  
     res.json({
       posts,
       filters,
