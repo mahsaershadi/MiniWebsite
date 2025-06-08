@@ -7,6 +7,7 @@ import Category from '../models/category';
 import { Op, Sequelize, QueryTypes } from 'sequelize';
 import sequelize from '../utils/database';
 import CategoryFilter from '../models/categoryFilter';
+import { validateAttributes } from '../utils/validateAttributes';
 
 declare global {
   namespace Express {
@@ -45,6 +46,20 @@ interface CreatePostBody {
   attributes?: Record<string, any>;
 }
 
+interface FilterValue {
+  type: 'exact' | 'range' | 'multiselect';
+  value?: string | number | boolean;
+  values?: (string | number)[];
+  range?: {
+    min?: number;
+    max?: number;
+  };
+}
+
+interface SearchFilters {
+  [key: string]: FilterValue;
+}
+
 //create a post
 export const createPost = async (req: Request, res: Response) => {
   try {
@@ -73,6 +88,15 @@ export const createPost = async (req: Request, res: Response) => {
       });
       if (!category) {
         return res.status(404).json({ message: 'Category not found' });
+      }
+
+      //Validate attributes
+      const validationErrors = await validateAttributes(categoryId, attributes);
+      if (validationErrors.length > 0) {
+        return res.status(400).json({ 
+          message: 'Invalid attributes',
+          errors: validationErrors
+        });
       }
     }
 
@@ -215,19 +239,19 @@ export const updatePost = async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const { postId } = req.params;
+    const postId = parseInt(req.params.id);
     const { 
       title, 
       price, 
-      coverPhotoId, 
-      galleryPhotos, 
+      categoryId, 
+      coverPhotoId,
       stock_quantity,
       description,
-      categoryId
+      attributes 
     } = req.body;
 
     const post = await Post.findOne({
-      where: {
+      where: { 
         id: postId,
         userId: req.user.id,
         status: 1
@@ -235,99 +259,32 @@ export const updatePost = async (req: Request, res: Response) => {
     });
 
     if (!post) {
-      return res.status(404).json({ message: 'Post not found or unauthorized' });
+      return res.status(404).json({ message: 'Post not found' });
     }
 
-    
-    if (categoryId) {
-      const category = await Category.findOne({
-        where: { id: categoryId, status: 1 }
-      });
-      if (!category) {
-        return res.status(404).json({ message: 'Category not found' });
-      }
-    }
-
-    if (coverPhotoId) {
-      const photo = await Photo.findOne({
-        where: {
-          id: coverPhotoId,
-          status: 1
-        }
-      });
-      if (!photo) {
-        return res.status(404).json({ message: 'Cover photo not found' });
-      }
-    }
-
-    //Update all fields
-    const updates: any = {};
-    if (title !== undefined) updates.title = title;
-    if (price !== undefined) updates.price = price;
-    if (coverPhotoId !== undefined) updates.cover_photo_id = coverPhotoId;
-    if (stock_quantity !== undefined) updates.stock_quantity = stock_quantity;
-    if (description !== undefined) updates.description = description;
-    if (categoryId !== undefined) updates.categoryId = categoryId;
-
-    await post.update(updates);
-
-    //Update gallery photos
-    if (galleryPhotos !== undefined) {
-      await PostGallery.destroy({
-        where: { postId: post.id }
-      });
-
-      if (galleryPhotos && galleryPhotos.length > 0) {
-        const photoIds = galleryPhotos.map((p: { photoId: number }) => p.photoId);
-        const photos = await Photo.findAll({
-          where: {
-            id: photoIds,
-            status: 1
-          }
+    if (attributes && categoryId) {
+      // Validate attributes against category filters
+      const validationErrors = await validateAttributes(categoryId, attributes);
+      if (validationErrors.length > 0) {
+        return res.status(400).json({ 
+          message: 'Invalid attributes',
+          errors: validationErrors
         });
-
-        if (photos.length !== photoIds.length) {
-          return res.status(404).json({ message: 'One or more gallery photos not found' });
-        }
-
-        await Promise.all(
-          galleryPhotos.map((photo: { photoId: number, order: number }) =>
-            PostGallery.create({
-              postId: post.id,
-              photoId: photo.photoId,
-              order: photo.order,
-              status: 1
-            })
-          )
-        );
       }
     }
 
-    const updatedPost = await Post.findByPk(post.id, {
-      include: [
-        {
-          model: Category,
-          as: 'category',
-          attributes: ['id', 'name']
-        },
-        {
-          model: Photo,
-          as: 'coverPhoto',
-          attributes: ['id', 'filename']
-        },
-        {
-          model: Photo,
-          as: 'galleryPhotos',
-          attributes: ['id', 'filename'],
-          through: {
-            attributes: ['order']
-          }
-        }
-      ],
-      order: [[{ model: Photo, as: 'galleryPhotos' }, PostGallery, 'order', 'ASC']]
+    // Update post
+    await post.update({
+      title: title || post.title,
+      price: price || post.price,
+      categoryId: categoryId || post.categoryId,
+      cover_photo_id: coverPhotoId || post.cover_photo_id,
+      stock_quantity: stock_quantity || post.stock_quantity,
+      description: description || post.description,
+      attributes: attributes || post.attributes
     });
 
-    res.json(updatedPost);
+    res.json(post);
   } catch (error) {
     console.error('Error updating post:', error);
     res.status(500).json({ message: 'Failed to update post' });
@@ -340,25 +297,19 @@ export const searchPosts = async (req: Request, res: Response) => {
     const {
       query,
       categoryIds,
-      minPrice,
-      maxPrice,
       sort = 'createdAt',
       order = 'DESC',
       page = '1',
       limit = '10',
-      includeSubcategories = 'true',
-      filters
+      includeSubcategories = 'true'
     } = req.query as {
       query?: string;
       categoryIds?: string;
-      minPrice?: string;
-      maxPrice?: string;
       sort?: string;
       order?: string;
       page?: string;
       limit?: string;
       includeSubcategories?: string;
-      filters?: string;
     };
 
     const whereClause: any = {
@@ -396,73 +347,74 @@ export const searchPosts = async (req: Request, res: Response) => {
       }
     }
 
-    //filters
-    if (filters) {
-      try {
-        const filterValues = JSON.parse(filters);
-        const filterConditions: any[] = [];
+    const filterConditions: any[] = [];
+    
+    const arrayFields = ['color', 'colors', 'size', 'sizes'];
+    
+    const filterGroups = new Map<string, string[]>();
+    
+    for (const [key, value] of Object.entries(req.query)) {
+      if (!key.startsWith('filter_') || !value) continue;
+      
+      const parts = key.split('_');
+      if (parts.length < 2) continue;
+      
+      const field = parts[1];
+      const filterType = parts.length > 2 ? parts[2] : null;
 
-        Object.entries(filterValues).forEach(([key, value]) => {
-          if (value !== undefined && value !== null && value !== '') {
-            if (key === 'price') {
-              if (typeof value === 'object' && ('min' in value || 'max' in value)) {
-                whereClause.price = {};
-                if ('min' in value && value.min !== null) {
-                  whereClause.price[Op.gte] = value.min;
-                }
-                if ('max' in value && value.max !== null) {
-                  whereClause.price[Op.lte] = value.max;
-                }
-              }
-            } else if (Array.isArray(value)) {
-              filterConditions.push(
-                sequelize.literal(
-                  `attributes->>'${key}' IN (${value.map(v => `'${v}'`).join(',')}) OR ` +
-                  `(attributes->'${key}' ?| array[${value.map(v => `'${v}'`).join(',')}])`
-                )
-              );
-            } else if (typeof value === 'object' && ('min' in value || 'max' in value)) {
-              //For range values
-              const rangeConditions = [];
-              if ('min' in value && value.min !== null) {
-                rangeConditions.push(
-                  sequelize.literal(`(attributes->>'${key}')::numeric >= ${value.min}`)
+      //Skip empty values
+      if (value === '') continue;
+
+      if (field === 'price') {
+        whereClause.price = whereClause.price || {};
+        if (filterType === 'min') {
+          whereClause.price[Op.gte] = parseFloat(value as string);
+        } else if (filterType === 'max') {
+          whereClause.price[Op.lte] = parseFloat(value as string);
+        }
+      } else {
+        //numeric range filters
+        if (filterType === 'min') {
+          filterConditions.push(
+            sequelize.literal(`CAST(attributes->>'${field}' AS NUMERIC) >= ${parseFloat(value as string)}`)
+          );
+        } else if (filterType === 'max') {
+          filterConditions.push(
+            sequelize.literal(`CAST(attributes->>'${field}' AS NUMERIC) <= ${parseFloat(value as string)}`)
+          );
+        } else {
+          if (value.toString().includes(',')) {
+            const values = (value as string).split(',').map(v => v.trim());
+            if (arrayFields.includes(field)) {
+              values.forEach(v => {
+                filterConditions.push(
+                  sequelize.literal(`attributes->'${field}' @> '["${v}"]'::jsonb`)
                 );
-              }
-              if ('max' in value && value.max !== null) {
-                rangeConditions.push(
-                  sequelize.literal(`(attributes->>'${key}')::numeric <= ${value.max}`)
-                );
-              }
-              if (rangeConditions.length > 0) {
-                filterConditions.push({ [Op.and]: rangeConditions });
-              }
+              });
             } else {
               filterConditions.push(
-                sequelize.literal(`attributes->>'${key}' = '${value}'`)
+                sequelize.literal(`attributes->>'${field}' IN (${values.map(v => `'${v}'`).join(',')})`)
+              );
+            }
+          } else {
+            //Single value
+            if (arrayFields.includes(field)) {
+              filterConditions.push(
+                sequelize.literal(`attributes->'${field}' @> '["${value}"]'::jsonb`)
+              );
+            } else {
+              filterConditions.push(
+                sequelize.literal(`attributes->>'${field}' = '${value}'`)
               );
             }
           }
-        });
-
-        if (filterConditions.length > 0) {
-          whereClause[Op.and] = filterConditions;
         }
-      } catch (error) {
-        console.error('Error parsing filters:', error);
-        return res.status(400).json({ 
-          message: 'Invalid filter format',
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
       }
     }
 
-    // // Add regular price range if provided separately
-    // if (minPrice || maxPrice) {
-    //   whereClause.price = whereClause.price || {};
-    //   if (minPrice) whereClause.price[Op.gte] = parseFloat(minPrice);
-    //   if (maxPrice) whereClause.price[Op.lte] = parseFloat(maxPrice);
-    // }
+    if (filterConditions.length > 0) {
+      whereClause[Op.and] = filterConditions;
+    }
 
     const offset = (Number(page) - 1) * Number(limit);
     const validSortFields = ['createdAt', 'price', 'title'] as const;
@@ -471,7 +423,6 @@ export const searchPosts = async (req: Request, res: Response) => {
     const sortField = validSortFields.includes(sort as SortField) ? sort as SortField : 'createdAt';
     const sortOrder = order === 'ASC' ? 'ASC' : 'DESC';
 
-    //Get posts with category information and filters
     const { count, rows: posts } = await Post.findAndCountAll({
       where: whereClause,
       include: [
@@ -484,13 +435,6 @@ export const searchPosts = async (req: Request, res: Response) => {
               model: Category,
               as: 'parent',
               attributes: ['id', 'name']
-            },
-            {
-              model: CategoryFilter,
-              as: 'filters',
-              attributes: ['id', 'category_id', 'name', 'type', 'options', 'min', 'max', 'required', 'order', 'status'],
-              where: { status: 1 },
-              required: false
             }
           ]
         },
@@ -520,7 +464,7 @@ export const searchPosts = async (req: Request, res: Response) => {
     console.error('Error searching posts:', error);
     res.status(500).json({ 
       message: 'Failed to search posts',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 };

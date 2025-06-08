@@ -9,19 +9,18 @@ import authenticate from '../Middleware/auth';
 
 const router = express.Router();
 
-// Middleware to ensure user is authenticated for all routes
 router.use(authenticate);
 
-// Create new category filter
+//Create
 router.post('/', createCategoryFilter as RequestHandler);
 
-// Get all filters for a category
+//Get
 router.get('/category/:category_id', getCategoryFilters as RequestHandler);
 
-// Update existing filter
+//Update
 router.put('/:id', updateCategoryFilter as RequestHandler);
 
-// Delete filter
+//Delete
 router.delete('/:id', deleteCategoryFilter as RequestHandler);
 
 export default router; 
