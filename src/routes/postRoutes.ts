@@ -3,31 +3,35 @@ import { createPost, getUserPosts, updatePost, searchPosts } from '../controller
 import authenticateUser from '../Middleware/auth';
 import asyncHandler from '../Middleware/asyncHandler';
 import { AuthRequest } from '../Middleware/auth';
+import { cacheMiddleware } from '../utils/cache';
 
 const router = express.Router();
 
-// Create post
+//Create post
 router.post(
   '/posts', 
   authenticateUser as RequestHandler,
   asyncHandler<AuthRequest>(createPost)
 );
 
-// Update post
+//Update post
 router.put(
   '/posts/:postId',
   authenticateUser as RequestHandler,
   asyncHandler<AuthRequest>(updatePost)
 );
 
-// Get user's posts
+//Get user's posts
 router.get(
   '/posts',
   authenticateUser as RequestHandler,
   asyncHandler<AuthRequest>(getUserPosts)
 );
 
-// Search posts
-router.get('/posts/search', asyncHandler(searchPosts));
+//Search posts
+router.get('/posts/search', 
+  cacheMiddleware(30), 
+  asyncHandler(searchPosts)
+);
 
 export default router;
