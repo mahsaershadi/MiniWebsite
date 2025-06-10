@@ -4,7 +4,7 @@ import Photo from '../models/photo';
 import User from '../models/user';
 import PostGallery from '../models/postGallery';
 import Category from '../models/category';
-import { Op, Sequelize, QueryTypes } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../utils/database';
 import CategoryFilter from '../models/categoryFilter';
 import { validateAttributes } from '../utils/validateAttributes';
@@ -349,67 +349,113 @@ export const searchPosts = async (req: Request, res: Response) => {
 
     const filterConditions: any[] = [];
     
-    const arrayFields = ['color', 'colors', 'size', 'sizes'];
+    //Define field name mappings
+    const fieldMappings = {
+      'color': ['color', 'colors', 'Color', 'Colors'],
+      'size': ['size', 'sizes', 'Size', 'Sizes'],
+      'skintypes': ['skintypes', 'SkinTypes', 'skinTypes']
+    };
     
-    const filterGroups = new Map<string, string[]>();
+    const arrayFields = ['color', 'size', 'skintypes'];
+        
+    const groupedFilters: { [key: string]: any[] } = {};
     
-    for (const [key, value] of Object.entries(req.query)) {
+    for (const [key, value] of Object.entries(req.query)) {      
       if (!key.startsWith('filter_') || !value) continue;
       
       const parts = key.split('_');
       if (parts.length < 2) continue;
       
-      const field = parts[1];
+      const fieldRaw = parts[1];
       const filterType = parts.length > 2 ? parts[2] : null;
-
+      
       //Skip empty values
       if (value === '') continue;
 
-      if (field === 'price') {
+      if (fieldRaw === 'price') {
         whereClause.price = whereClause.price || {};
         if (filterType === 'min') {
           whereClause.price[Op.gte] = parseFloat(value as string);
         } else if (filterType === 'max') {
           whereClause.price[Op.lte] = parseFloat(value as string);
         }
-      } else {
-        //numeric range filters
-        if (filterType === 'min') {
-          filterConditions.push(
-            sequelize.literal(`CAST(attributes->>'${field}' AS NUMERIC) >= ${parseFloat(value as string)}`)
-          );
-        } else if (filterType === 'max') {
-          filterConditions.push(
-            sequelize.literal(`CAST(attributes->>'${field}' AS NUMERIC) <= ${parseFloat(value as string)}`)
-          );
+        continue;
+      }
+
+      //Initialize group
+      if (!groupedFilters[fieldRaw]) {
+        groupedFilters[fieldRaw] = [];
+      }
+
+      if (value.toString().includes(',')) {
+        const values = (value as string).split(',').map(v => v.trim().toLowerCase());
+        if (arrayFields.includes(fieldRaw)) {
+          const possibleFieldNames = fieldMappings[fieldRaw as keyof typeof fieldMappings] || [fieldRaw];
+          
+          const valueConditions = values.map(val => {
+            return `(
+              ${possibleFieldNames.map(fieldName => `
+                (
+                  (jsonb_typeof(attributes->'${fieldName}') = 'array' AND 
+                  EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements_text(attributes->'${fieldName}') as elem
+                    WHERE LOWER(elem::text) = '${val}'
+                  ))
+                  OR
+                  (jsonb_typeof(attributes->'${fieldName}') = 'string' AND 
+                  LOWER(attributes->>'${fieldName}') = '${val}')
+                )
+              `).join(' OR ')}
+            )`;
+          });
+          
+          groupedFilters[fieldRaw].push(sequelize.literal(`(${valueConditions.join(' AND ')})`));
         } else {
-          if (value.toString().includes(',')) {
-            const values = (value as string).split(',').map(v => v.trim());
-            if (arrayFields.includes(field)) {
-              values.forEach(v => {
-                filterConditions.push(
-                  sequelize.literal(`attributes->'${field}' @> '["${v}"]'::jsonb`)
-                );
-              });
-            } else {
-              filterConditions.push(
-                sequelize.literal(`attributes->>'${field}' IN (${values.map(v => `'${v}'`).join(',')})`)
-              );
-            }
-          } else {
-            //Single value
-            if (arrayFields.includes(field)) {
-              filterConditions.push(
-                sequelize.literal(`attributes->'${field}' @> '["${value}"]'::jsonb`)
-              );
-            } else {
-              filterConditions.push(
-                sequelize.literal(`attributes->>'${field}' = '${value}'`)
-              );
-            }
-          }
+          values.forEach(val => {
+            groupedFilters[fieldRaw].push(
+              sequelize.where(
+                sequelize.fn('LOWER', sequelize.col(`attributes->>'${fieldRaw}'`)),
+                val
+              )
+            );
+          });
+        }
+      } else {
+        const singleValue = value.toString().toLowerCase();
+        if (arrayFields.includes(fieldRaw)) {
+          const possibleFieldNames = fieldMappings[fieldRaw as keyof typeof fieldMappings] || [fieldRaw];
+          
+          const condition = `(
+            ${possibleFieldNames.map(fieldName => `
+              (
+                (jsonb_typeof(attributes->'${fieldName}') = 'array' AND 
+                EXISTS (
+                  SELECT 1
+                  FROM jsonb_array_elements_text(attributes->'${fieldName}') as elem
+                  WHERE LOWER(elem::text) = '${singleValue}'
+                ))
+                OR
+                (jsonb_typeof(attributes->'${fieldName}') = 'string' AND 
+                LOWER(attributes->>'${fieldName}') = '${singleValue}')
+              )
+            `).join(' OR ')}
+          )`;
+          
+          groupedFilters[fieldRaw].push(sequelize.literal(condition));
+        } else {
+          groupedFilters[fieldRaw].push(
+            sequelize.where(
+              sequelize.fn('LOWER', sequelize.col(`attributes->>'${fieldRaw}'`)),
+              singleValue
+            )
+          );
         }
       }
+    }
+
+    if (Object.keys(groupedFilters).length > 0) {
+      filterConditions.push(...Object.values(groupedFilters).flat());
     }
 
     if (filterConditions.length > 0) {
@@ -448,7 +494,7 @@ export const searchPosts = async (req: Request, res: Response) => {
       ],
       order: [[sortField, sortOrder]],
       limit: Number(limit),
-      offset: offset
+      offset: offset,
     });
 
     res.json({
