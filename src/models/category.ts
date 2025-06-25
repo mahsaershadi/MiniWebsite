@@ -15,6 +15,9 @@ class Category extends Model<CategoryAttributes, CategoryCreationAttributes> imp
   public name!: string;
   public parentId!: number | null;
   public status!: number;
+
+  public readonly subcategories?: Category[];
+  public readonly parent?: Category;
 }
 
 Category.init({

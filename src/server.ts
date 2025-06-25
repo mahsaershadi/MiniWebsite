@@ -8,6 +8,7 @@ import { sequelize } from './models';
 import categoryRoutes from './routes/categoryRoutes';
 import cartRoutes from './routes/cartRoutes';
 import categoryFilterRoutes from './routes/categoryFilterRoutes';
+import menuRoutes from './routes/menuRoutes';
 import cors from 'cors';
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api', deleteRoutes);
 app.use('/api', categoryRoutes);
 app.use('/api', cartRoutes);
 app.use('/api/category-filters', categoryFilterRoutes);
+app.use('/api', menuRoutes);
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);

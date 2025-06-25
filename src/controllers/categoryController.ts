@@ -4,16 +4,16 @@ import { Post, Photo, PostGallery } from '../models';
 import { Op } from 'sequelize';
 import { Sequelize } from 'sequelize';
 
-interface CategoryWithParent extends Category {
+type CategoryWithParent = Category & {
   parent?: {
     id: number;
     name: string;
-  } | null;
-}
+  };
+};
 
-interface CategoryWithSubcategories extends Category {
+type CategoryWithSubcategories = Category & {
   subcategories?: CategoryWithSubcategories[];
-}
+};
 
 //subs
 const getAllSubcategoryIds = async (categoryId: number): Promise<number[]> => {
