@@ -6,7 +6,7 @@ import PostGallery from './postGallery';
 import Category from './category';
 import CartItem from './cart';
 import CategoryFilter from './categoryFilter';
-
+import PostVersion from './postVersion';
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -17,7 +17,8 @@ const models = {
   Photo,
   PostGallery,
   Category,
-  CategoryFilter
+  CategoryFilter,
+  PostVersion
 };
 
 // User 
@@ -55,5 +56,9 @@ Category.hasMany(CategoryFilter, {foreignKey: 'category_id', as: 'filters'});
 CartItem.belongsTo(User, { foreignKey: 'userId' });
 CartItem.belongsTo(Post, { foreignKey: 'postId' });
 
+// PostVersion associations
+PostVersion.belongsTo(Post, { foreignKey: 'postId', as: 'post' });
+PostVersion.belongsTo(User, { foreignKey: 'changedBy', as: 'changedByUser' });
+Post.hasMany(PostVersion, { foreignKey: 'postId', as: 'versions' });
 
-export { Post, Photo, User, PostGallery, Category, sequelize, CategoryFilter };
+export { Post, Photo, User, PostGallery, Category, sequelize, CategoryFilter, PostVersion };

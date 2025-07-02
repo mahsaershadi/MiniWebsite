@@ -8,6 +8,8 @@ import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../utils/database';
 import CategoryFilter from '../models/categoryFilter';
 import { validateAttributes } from '../utils/validateAttributes';
+import { createPostVersion } from '../utils/versioning';
+
 
 declare global {
   namespace Express {
@@ -62,8 +64,11 @@ interface SearchFilters {
 
 //create a post
 export const createPost = async (req: Request, res: Response) => {
+  const transaction = await sequelize.transaction();
+  
   try {
     if (!req.user) {
+      await transaction.rollback();
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
@@ -79,6 +84,7 @@ export const createPost = async (req: Request, res: Response) => {
     } = req.body as CreatePostBody;
     
     if (!title || !price) {
+      await transaction.rollback();
       return res.status(400).json({ message: 'Title and price are required' });
     }
 
@@ -87,12 +93,14 @@ export const createPost = async (req: Request, res: Response) => {
         where: { id: categoryId, status: 1 }
       });
       if (!category) {
+        await transaction.rollback();
         return res.status(404).json({ message: 'Category not found' });
       }
 
       //Validate attributes
       const validationErrors = await validateAttributes(categoryId, attributes);
       if (validationErrors.length > 0) {
+        await transaction.rollback();
         return res.status(400).json({ 
           message: 'Invalid attributes',
           errors: validationErrors
@@ -108,6 +116,7 @@ export const createPost = async (req: Request, res: Response) => {
         }
       });
       if (!photo) {
+        await transaction.rollback();
         return res.status(404).json({ message: 'Cover photo not found' });
       }
     }
@@ -122,6 +131,7 @@ export const createPost = async (req: Request, res: Response) => {
       });
 
       if (photos.length !== photoIds.length) {
+        await transaction.rollback();
         return res.status(404).json({ message: 'One or more gallery photos not found' });
       }
     }
@@ -136,6 +146,14 @@ export const createPost = async (req: Request, res: Response) => {
       stock_quantity,
       description,
       attributes
+    }, { transaction });
+
+    // Create initial version for the new post
+    await createPostVersion(post, {
+      changeType: 'CREATE',
+      changedBy: req.user.id,
+      changeReason: 'Initial product creation',
+      transaction
     });
 
     //Add gallery photos
@@ -147,10 +165,12 @@ export const createPost = async (req: Request, res: Response) => {
             photoId: photo.photoId,
             order: photo.order,
             status: 1
-          })
+          }, { transaction })
         )
       );
     }
+
+    await transaction.commit();
 
     const createdPost = await Post.findByPk(post.id, {
       include: [
@@ -173,6 +193,7 @@ export const createPost = async (req: Request, res: Response) => {
 
     res.status(201).json(createdPost);
   } catch (error) {
+    await transaction.rollback();
     console.error('Error creating post:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     res.status(500).json({ message: 'Failed to create post', details: errorMessage });
@@ -234,12 +255,15 @@ export const getUserPosts = async (req: Request, res: Response) => {
 
 //updated post
 export const updatePost = async (req: Request, res: Response) => {
+  const transaction = await sequelize.transaction();
+  
   try {
     if (!req.user) {
+      await transaction.rollback();
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const postId = parseInt(req.params.id);
+    const postId = parseInt(req.params.postId);
     const { 
       title, 
       price, 
@@ -247,7 +271,8 @@ export const updatePost = async (req: Request, res: Response) => {
       coverPhotoId,
       stock_quantity,
       description,
-      attributes 
+      attributes,
+      changeReason 
     } = req.body;
 
     const post = await Post.findOne({
@@ -255,10 +280,12 @@ export const updatePost = async (req: Request, res: Response) => {
         id: postId,
         userId: req.user.id,
         status: 1
-      }
+      },
+      transaction
     });
 
     if (!post) {
+      await transaction.rollback();
       return res.status(404).json({ message: 'Post not found' });
     }
 
@@ -266,6 +293,7 @@ export const updatePost = async (req: Request, res: Response) => {
       // Validate attributes against category filters
       const validationErrors = await validateAttributes(categoryId, attributes);
       if (validationErrors.length > 0) {
+        await transaction.rollback();
         return res.status(400).json({ 
           message: 'Invalid attributes',
           errors: validationErrors
@@ -282,10 +310,29 @@ export const updatePost = async (req: Request, res: Response) => {
       stock_quantity: stock_quantity || post.stock_quantity,
       description: description || post.description,
       attributes: attributes || post.attributes
+    }, { transaction });
+
+    // Fetch the updated post
+    const updatedPost = await Post.findByPk(post.id, { transaction });
+
+    if (!updatedPost) {
+      await transaction.rollback();
+      return res.status(404).json({ message: 'Post not found after update' });
+    }
+
+    // Create a version of the updated state
+    await createPostVersion(updatedPost, {
+      changeType: 'UPDATE',
+      changedBy: req.user.id,
+      changeReason: changeReason || 'Product updated',
+      transaction
     });
 
-    res.json(post);
+    await transaction.commit();
+
+    res.json(updatedPost);
   } catch (error) {
+    await transaction.rollback();
     console.error('Error updating post:', error);
     res.status(500).json({ message: 'Failed to update post' });
   }
@@ -512,5 +559,128 @@ export const searchPosts = async (req: Request, res: Response) => {
       message: 'Failed to search posts',
       error: error instanceof Error ? error.message : 'Unknown error',
     });
+  }
+};
+
+//Get version history for a post
+export const getPostVersionHistory = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const postId = parseInt(req.params.id);
+
+    const post = await Post.findOne({
+      where: { 
+        id: postId,
+        userId: req.user.id,
+        status: 1
+      }
+    });
+
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    const { getPostVersionHistory } = await import('../utils/versioning');
+    const versions = await getPostVersionHistory(postId);
+
+    res.json({
+      post: {
+        id: post.id,
+        title: post.title
+      },
+      versions
+    });
+  } catch (error) {
+    console.error('Error fetching post version history:', error);
+    res.status(500).json({ message: 'Failed to fetch version history' });
+  }
+};
+
+//Get a specific version of a post
+export const getPostVersion = async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const postId = parseInt(req.params.id);
+    const versionNumber = parseInt(req.params.versionNumber);
+
+    const post = await Post.findOne({
+      where: { 
+        id: postId,
+        userId: req.user.id,
+        status: 1
+      }
+    });
+
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    const { getPostVersion } = await import('../utils/versioning');
+    const version = await getPostVersion(postId, versionNumber);
+
+    if (!version) {
+      return res.status(404).json({ message: 'Version not found' });
+    }
+
+    res.json(version);
+  } catch (error) {
+    console.error('Error fetching post version:', error);
+    res.status(500).json({ message: 'Failed to fetch post version' });
+  }
+};
+
+//Restore a post to a specific version
+export const restorePostVersion = async (req: Request, res: Response) => {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    if (!req.user) {
+      await transaction.rollback();
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const postId = parseInt(req.params.id);
+    const versionNumber = parseInt(req.params.versionNumber);
+    const { changeReason } = req.body;
+
+    const post = await Post.findOne({
+      where: { 
+        id: postId,
+        userId: req.user.id,
+        status: 1
+      },
+      transaction
+    });
+
+    if (!post) {
+      await transaction.rollback();
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    const { restorePostVersion } = await import('../utils/versioning');
+    const restoredPost = await restorePostVersion(
+      postId, 
+      versionNumber, 
+      req.user.id,
+      changeReason || `Restored to version ${versionNumber}`,
+      transaction
+    );
+
+    await transaction.commit();
+
+    res.json({
+      message: 'Post restored successfully',
+      post: restoredPost
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Error restoring post version:', error);
+    res.status(500).json({ message: 'Failed to restore post version' });
   }
 };
